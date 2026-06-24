@@ -1,0 +1,110 @@
+// Dog Content Automation System - Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Video {
+  id             String   @id @default(cuid())
+  filename       String
+  originalPath   String
+  processedPath  String?
+  thumbnailPath  String?
+  sizeBytes      Int
+  durationSec    Float?
+  width          Int?
+  height         Int?
+  mimeType       String
+
+  // AI analysis
+  transcription  String?
+  viralScore     Int?
+  aiCaption      String?
+  aiHashtags     String?
+  aiTitle        String?
+  aiDescription  String?
+
+  // Status: pending | transcribing | editing | scoring | ready | publishing | published | failed
+  status         String   @default("pending")
+  progress       Int      @default(0)
+  currentStep    String?
+  errorMessage   String?
+
+  // Editing settings snapshot (JSON)
+  editSettings   String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  jobs           Job[]
+  posts          Post[]
+}
+
+model Job {
+  id           String   @id @default(cuid())
+  videoId      String
+  video        Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  type         String   // transcribe | edit | score | publish
+  status       String   @default("queued") // queued | running | completed | failed
+  progress     Int      @default(0)
+  message      String?
+  result       String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model SocialAccount {
+  id           String   @id @default(cuid())
+  platform     String   // youtube | tiktok | instagram | facebook | x
+  handle       String
+  displayName  String?
+  accessToken  String
+  refreshToken String?
+  tokenExpiry  DateTime?
+  metadata     String?  // platform-specific JSON
+  connected    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  posts        Post[]
+}
+
+model Post {
+  id           String   @id @default(cuid())
+  videoId      String
+  video        Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  accountId    String
+  account      SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  platform     String
+  status       String   @default("pending") // pending | uploading | published | failed
+  platformPostId String?
+  platformUrl  String?
+  title        String?
+  description  String?
+  hashtags     String?
+  errorMessage String?
+  publishedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Setting {
+  id    String @id
+  value String
+}
+
+model Asset {
+  id        String   @id @default(cuid())
+  type      String   // watermark | intro | outro | music | font
+  name      String
+  filePath  String
+  mimeType  String
+  sizeBytes Int
+  createdAt DateTime @default(now())
+}
