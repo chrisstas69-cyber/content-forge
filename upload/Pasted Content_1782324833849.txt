@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dog Content Automation System | Phase 2 Complete</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
+            --bg-body: #f3f4f6;
+            --bg-card: #ffffff;
+            --text-main: #111827;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --purple: #8b5cf6;
+            --sidebar-width: 260px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+
+        body { background-color: var(--bg-body); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
+
+        /* --- Sidebar --- */
+        aside {
+            width: var(--sidebar-width);
+            background-color: #1f2937;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            flex-shrink: 0;
+            transition: transform 0.3s;
+        }
+
+        .brand { font-size: 1.25rem; font-weight: 700; margin-bottom: 2rem; display: flex; align-items: center; gap: 10px; color: var(--primary); }
+        .brand span { color: white; }
+
+        nav button {
+            background: none; border: none; color: #9ca3af; width: 100%; padding: 0.75rem 1rem;
+            text-align: left; cursor: pointer; border-radius: 0.5rem; margin-bottom: 0.5rem; font-size: 0.95rem;
+            transition: all 0.2s; display: flex; align-items: center; gap: 10px;
+        }
+        nav button:hover, nav button.active { background-color: #374151; color: white; }
+
+        .system-status { margin-top: auto; padding: 1rem; background: #374151; border-radius: 0.5rem; font-size: 0.85rem; }
+        .status-dot { display: inline-block; width: 8px; height: 8px; background-color: var(--success); border-radius: 50%; margin-right: 5px; }
+
+        /* --- Main Content --- */
+        main { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+        header {
+            background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 1rem 2rem;
+            display: flex; justify-content: space-between; align-items: center; height: 70px;
+        }
+        h1 { font-size: 1.5rem; }
+        
+        .actions { display: flex; gap: 1rem; }
+        .btn {
+            padding: 0.5rem 1rem; border-radius: 0.375rem; border: none; cursor: pointer; font-weight: 500;
+            transition: background 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-secondary { background: white; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-secondary:hover { background: #f9fafb; }
+        .btn-danger { background: var(--danger); color: white; }
+
+        /* --- Views Container --- */
+        .content-area { padding: 2rem; overflow-y: auto; flex: 1; display: none; }
+        .content-area.active { display: block; }
+
+        /* --- Dashboard Grid --- */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .stat-card { background: var(--bg-card); padding: 1.5rem; border-radius: 0.75rem; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .stat-label { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem; }
+        .stat-value { font-size: 1.875rem; font-weight: 700; color: var(--text-main); }
+
+        /* --- Kanban Board --- */
+        .workflow-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; height: calc(100vh - 250px); min-height: 400px; }
+        .workflow-column { background: #e5e7eb; border-radius: 0.75rem; padding: 1rem; display: flex; flex-direction: column; }
+        .column-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0 0.5rem; }
+        .column-title { font-weight: 600; font-size: 0.9rem; color: #374151; }
+        .count-badge { background: #d1d5db; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }
+        .video-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; }
+
+        .video-card {
+            background: white; padding: 0.75rem; border-radius: 0.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; border-left: 4px solid transparent;
+        }
+        .video-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .video-card.status-raw { border-left-color: var(--text-muted); }
+        .video-card.status-ready { border-left-color: var(--success); }
+        .video-card.status-review { border-left-color: var(--warning); }
+        .video-card.status-published { border-left-color: var(--primary); }
+
+        .card-header { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+        .card-title { font-size: 0.9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+        .viral-score { font-size: 0.75rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; color: white; }
+        .score-high { background: var(--success); } .score-med { background: var(--warning); } .score-low { background: var(--danger); }
+        .card-meta { font-size: 0.75rem; color: var(--text-muted); display: flex; justify-content: space-between; }
+
+        /* --- Settings & Gmail Views --- */
+        .panel { background: white; padding: 2rem; border-radius: 0.75rem; border: 1px solid var(--border); max-width: 800px; margin: 0 auto; }
+        .panel h2 { margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+        
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; }
+        .form-control { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 0.9rem; }
+        
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: #f9fafb; border-radius: 0.5rem; margin-bottom: 0.75rem; border: 1px solid var(--border); }
+        .toggle-label { font-weight: 500; }
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* Gmail List */
+        .email-list { display: flex; flex-direction: column; gap: 1rem; }
+        .email-item { background: white; padding: 1rem; border: 1px solid var(--border); border-radius: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+        .email-content h4 { font-size: 1rem; margin-bottom: 0.25rem; }
+        .email-content p { font-size: 0.85rem; color: var(--text-muted); }
+        .link-preview { background: #eff6ff; color: var(--primary); padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 0.8rem; margin-top: 5px; display: inline-block; }
+
+        /* --- Modal --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);
+            display: none; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal { background: white; width: 900px; max-width: 95%; max-height: 90vh; border-radius: 1rem; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .modal-header { padding: 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .modal-body { padding: 2rem; overflow-y: auto; display: grid; grid-template-columns: 350px 1fr; gap: 2rem; }
+
+        /* Video Preview & Overlays */
+        .preview-wrapper { position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; }
+        .video-preview {
+            background: black; aspect-ratio: 9/16; width: 260px; border-radius: 0.5rem; position: relative;
+            display: flex; align-items: center; justify-content: center; color: white; overflow: hidden; box-shadow: 0 10px 15px rgba(0,0,0,0.2);
+        }
+        .video-preview img { width: 100%; height: 100%; object-fit: cover; opacity: 0.8; }
+        
+        /* Phase 2 Overlays */
+        .watermark-overlay {
+            position: absolute; top: 15px; right: 15px; color: rgba(255,255,255,0.8); font-weight: bold;
+            font-size: 0.9rem; text-shadow: 1px 1px 2px black; pointer-events: none; z-index: 10;
+        }
+        .caption-overlay {
+            position: absolute; bottom: 30px; left: 15px; right: 15px; background: rgba(0,0,0,0.6);
+            padding: 10px; border-radius: 8px; font-size: 0.9rem; text-align: center; font-weight: 600;
+            color: #fff; text-shadow: 1px 1px 2px black; pointer-events: none; z-index: 10;
+        }
+
+        /* Progress Bar */
+        .progress-bar { width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; margin-top: 10px; overflow: hidden; display: none; }
+        .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.3s ease; }
+        .progress-text { font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; text-align: right; min-height: 1.2em;}
+
+        /* Toast */
+        .toast-container { position: fixed; bottom: 2rem; right: 2rem; z-index: 2000; display: flex; flex-direction: column; gap: 0.5rem; }
+        .toast { background: #1f2937; color: white; padding: 1rem; border-radius: 0.5rem; box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1); animation: slideIn 0.3s ease-out; min-width: 300px; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        @media (max-width: 1024px) {
+            .workflow-container { grid-template-columns: repeat(2, 1fr); }
+            .modal-body { grid-template-columns: 1fr; }
+            .preview-wrapper { margin-bottom: 2rem; }
+        }
+        @media (max-width: 768px) {
+            body { flex-direction: column; overflow: auto; }
+            aside { width: 100%; height: auto; }
+            .workflow-container { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside>
+        <div class="brand">🐕 <span>DogAuto<span style="color:var(--primary)">Sys</span></span></div>
+        <nav>
+            <button class="active" onclick="switchTab('dashboard', this)">📊 Dashboard</button>
+            <button onclick="switchTab('gmail', this)">📧 Gmail Ingestion</button>
+            <button onclick="switchTab('sheets', this)">📊 Sheets Log</button>
+            <button onclick="switchTab('settings', this)">⚙️ Settings</button>
+        </nav>
+        <div class="system-status">
+            <div><span class="status-dot"></span> System Online</div>
+            <div style="margin-top:5px; color:#9ca3af; font-size: 0.75rem;">Next Scan: 6:00 PM</div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main>
+        <header>
+            <h1 id="page-title">Dashboard</h1>
+            <div class="actions">
+                <button class="btn btn-secondary" onclick="showEmailReport()">📄 Daily Report</button>
+                <button class="btn btn-primary" id="run-scan-btn" onclick="runAutomationScan()">
+                    <span>▶</span> Run Automation Scan
+                </button>
+            </div>
+        </header>
+
+        <!-- DASHBOARD VIEW -->
+        <div class="content-area active" id="view-dashboard">
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-label">Total Processed</div><div class="stat-value" id="stat-total">0</div></div>
+                <div class="stat-card"><div class="stat-label">Avg Viral Score</div><div class="stat-value" id="stat-score">0</div></div>
+                <div class="stat-card"><div class="stat-label">Ready to Post</div><div class="stat-value" id="stat-ready" style="color: var(--success)">0</div></div>
+                <div class="stat-card"><div class="stat-label">Needs Review</div><div class="stat-value" id="stat-review" style="color: var(--warning)">0</div></div>
+            </div>
+            <div class="workflow-container">
+                <div class="workflow-column">
+                    <div class="column-header"><span class="column-title">01_Raw</span><span class="count-badge" id="count-raw">0</span></div>
+                    <div class="video-list" id="list-raw"></div>
+                </div>
+                <div class="workflow-column">
+                    <div class="column-header"><span class="column-title">02_Ready_To_Post</span><span class="count-badge" id="count-ready">0</span></div>
+                    <div class="video-list" id="list-ready"></div>
+                </div>
+                <div class="workflow-column">
+                    <div class="column-header"><span class="column-title">03_Needs_Review</span><span class="count-badge" id="count-review">0</span></div>
+                    <div class="video-list" id="list-review"></div>
+                </div>
+                <div class="workflow-column">
+                    <div class="column-header"><span class="column-title">04_Published</span><span class="count-badge" id="count-published">0</span></div>
+                    <div class="video-list" id="list-published"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GMAIL VIEW -->
+        <div class="content-area" id="view-gmail">
+            <div class="panel">
+                <h2>📥 Gmail Ingestion</h2>
+                <p style="margin-bottom: 1.5rem; color: var(--text-muted);">Automatically detects emails with "Dog Video" in the subject or video links.</p>
+                <div class="email-list" id="gmail-list">
+                    <!-- JS populates this -->
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS VIEW -->
+        <div class="content-area" id="view-settings">
+            <div class="panel">
+                <h2>⚙️ Automation & Editing Settings</h2>
+                
+                <h3 style="margin-bottom: 1rem; font-size: 1.1rem; color: var(--text-main);">Video Editing Pipeline</h3>
+                
+                <div class="toggle-row">
+                    <span class="toggle-label">Auto-Trim Silence</span>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-trim" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row">
+                    <span class="toggle-label">Add Trending Background Music</span>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-music" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row">
+                    <span class="toggle-label">Burn Auto-Captions (Phase 1)</span>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-captions" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <h3 style="margin: 2rem 0 1rem 0; font-size: 1.1rem; color: var(--text-main);">Branding</h3>
+
+                <div class="toggle-row">
+                    <span class="toggle-label">Enable Watermark</span>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-watermark" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label>Watermark Text</label>
+                    <input type="text" class="form-control" id="setting-watermark-text" value="@DogViralDaily">
+                </div>
+
+                <div class="form-group">
+                    <label>Intro Video Clip</label>
+                    <select class="form-control" id="setting-intro">
+                        <option value="none">None</option>
+                        <option value="intro_a">Intro A: "Subscribe for more!"</option>
+                        <option value="intro_b">Intro B: Logo Animation</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Outro Video Clip</label>
+                    <select class="form-control" id="setting-outro">
+                        <option value="none">None</option>
+                        <option value="outro_a">Outro A: "Follow us"</option>
+                    </select>
+                </div>
+
+                <button class="btn btn-primary" onclick="saveSettings()">Save Configuration</button>
+            </div>
+        </div>
+        
+        <!-- Placeholder for other tabs -->
+        <div class="content-area" id="view-sheets">
+            <div class="panel" style="text-align:center; padding: 4rem;">
+                <h2>📊 Google Sheets Integration</h2>
+                <p>Data logging is active in the background.</p>
+                <div style="margin-top: 2rem; background: #f9fafb; padding: 2rem; border-radius: 0.5rem; text-align: left; font-family: monospace;">
+                    Connecting to Sheets API...<br>
+                    Authenticating User...<br>
+                    [✅] Log Stream Active
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Video Modal -->
+    <div class="modal-overlay" id="video-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modal-title">Video Details</h2>
+                <button class="btn btn-secondary" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Left: Preview -->
+                <div class="preview-wrapper">
+                    <div class="video-preview">
+                        <img id="modal-img" src="" alt="Video">
+                        <div class="watermark-overlay" id="preview-watermark">@DogViralDaily</div>
+                        <div class="caption-overlay" id="preview-caption">Loading caption...</div>
+                    </div>
+                    <div style="margin-top: 1rem; text-align: center;">
+                        <span style="font-size: 0.8rem; background: #e5e7eb; padding: 4px 8px; border-radius: 4px;">Live Preview</span>
+                    </div>
+                </div>
+
+                <!-- Right: Data -->
+                <div>
+                    <h3>AI Analysis & Content</h3>
+                    <div class="form-group">
+                        <label>Viral Score</label>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="flex:1; height: 8px; background: #e5e7eb; border-radius: 4px;">
+                                <div id="modal-score-bar" style="width: 0%; height: 100%; background: var(--primary);"></div>
+                            </div>
+                            <span id="modal-score-text" style="font-weight: bold;">--</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Caption</label>
+                        <textarea class="form-control" id="modal-caption" style="min-height: 80px;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Hashtags</label>
+                        <input type="text" class="form-control" id="modal-tags">
+                    </div>
+
+                    <div id="modal-actions" style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+                        <!-- Dynamic Buttons -->
+                    </div>
+                    
+                    <div class="progress-bar" id="modal-progress">
+                        <div class="progress-fill" id="modal-progress-fill"></div>
+                    </div>
+                    <div class="progress-text" id="modal-progress-text"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Report Modal -->
+    <div class="modal-overlay" id="report-modal">
+        <div class="modal" style="width: 600px;">
+            <div class="modal-header">
+                <h2>Daily Summary Report</h2>
+                <button class="btn btn-secondary" onclick="document.getElementById('report-modal').style.display='none'">✕</button>
+            </div>
+            <div class="modal-body" style="grid-template-columns: 1fr;">
+                <div style="background: #fff; border: 1px solid #ddd; padding: 2rem; font-family: sans-serif; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                    <h1 style="font-size: 1.2rem; color: #333; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">📊 Dog Content Daily Digest</h1>
+                    <p style="color: #666; font-size: 0.9rem;">Generated automatically at 6:00 PM</p>
+                    <table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Processed Today:</strong></td>
+                            <td style="padding: 10px; border-bottom: 1px solid #eee;" id="report-total">0</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Publish Ready:</strong></td>
+                            <td style="padding: 10px; border-bottom: 1px solid #eee;" id="report-ready" style="color: green; font-weight: bold;">0</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Avg Viral Score:</strong></td>
+                            <td style="padding: 10px; border-bottom: 1px solid #eee;" id="report-score">0</td>
+                        </tr>
+                    </table>
+                    <div style="margin-top: 20px; background: #f0f9ff; padding: 10px; border-radius: 4px; font-size: 0.85rem; color: #0c4a6e;">
+                        ℹ️ Note: 2 videos were auto-trimmed for silence. Watermark applied to all high-score videos.
+                    </div>
+                    <button class="btn btn-primary" style="margin-top: 20px; width: 100%; justify-content: center;" onclick="document.getElementById('report-modal').style.display='none'">Close Report</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        // --- Data State ---
+        const settings = {
+            trim: true,
+            music: true,
+            captions: true,
+            watermark: true,
+            watermarkText: "@DogViralDaily",
+            intro: "intro_a",
+            outro: "none"
+        };
+
+        let videos = [
+            { id: 1, name: "Golden_Retriever_Jump.mp4", status: "01_Raw", score: null, caption: "", tags: "", date: new Date().toLocaleDateString(), img: "https://picsum.photos/seed/dog1/300/500" },
+            { id: 2, name: "Pug_Falling_Asleep.mp4", status: "01_Raw", score: null, caption: "", tags: "", date: new Date().toLocaleDateString(), img: "https://picsum.photos/seed/dog2/300/500" },
+        ];
+
+        const emails = [
+            { id: 101, subject: "Check out this funny dog!", from: "fan@example.com", link: "drive.google.com/file/d/funny_pug", processed: false },
+            { id: 102, subject: "Submission: Husky howling", from: "submitter@test.com", link: "drive.google.com/file/d/husky_howl", processed: false },
+            { id: 103, subject: "Viral Golden Retriever", from: "scout@agency.com", link: "drive.google.com/file/d/golden_viral", processed: false }
+        ];
+
+        let currentVideoId = null;
+        let isProcessing = false;
+
+        // --- Init ---
+        function init() {
+            renderBoard();
+            renderGmail();
+            loadSettings();
+            updateStats();
+        }
+
+        // --- Navigation ---
+        function switchTab(tabName, btn) {
+            // Update Sidebar
+            document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+            if(btn) btn.classList.add('active');
+            else {
+                // Find button by index if called programmatically (not used here but good practice)
+                const btns = document.querySelectorAll('nav button');
+                if(tabName === 'dashboard') btns[0].classList.add('active');
+                if(tabName === 'gmail') btns[1].classList.add('active');
+                if(tabName === 'sheets') btns[2].classList.add('active');
+                if(tabName === 'settings') btns[3].classList.add('active');
+            }
+
+            // Update Header
+            document.getElementById('page-title').innerText = tabName.charAt(0).toUpperCase() + tabName.slice(1);
+
+            // Show View
+            document.querySelectorAll('.content-area').forEach(el => el.classList.remove('active'));
+            document.getElementById(`view-${tabName}`).classList.add('active');
+        }
+
+        // --- Gmail Logic ---
+        function renderGmail() {
+            const list = document.getElementById('gmail-list');
+            list.innerHTML = '';
+            
+            const unprocessed = emails.filter(e => !e.processed);
+            
+            if(unprocessed.length === 0) {
+                list.innerHTML = `<div style="text-align:center; padding: 2rem; color: #9ca3af;">Inbox Zero! 🎉</div>`;
+                return;
+            }
+
+            unprocessed.forEach(email => {
+                const item = document.createElement('div');
+                item.className = 'email-item';
+                item.innerHTML = `
+                    <div class="email-content">
+                        <h4>${email.subject}</h4>
+                        <p>From: ${email.from}</p>
+                        <div class="link-preview">${email.link}</div>
+                    </div>
+                    <button class="btn btn-secondary" onclick="ingestVideo(${email.id})">⬇️ Download & Ingest</button>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function ingestVideo(emailId) {
+            const email = emails.find(e => e.id === emailId);
+            if(!email) return;
+
+            showToast(`📥 Downloading video from ${email.from}...`);
+
+            setTimeout(() => {
+                email.processed = true;
+                const newVideo = {
+                    id: Date.now(),
+                    name: `Ingested_${email.subject.replace(/\s+/g, '_')}.mp4`,
+                    status: "01_Raw",
+                    score: null,
+                    caption: "",
+                    tags: "",
+                    date: new Date().toLocaleDateString(),
+                    img: `https://picsum.photos/seed/${emailId}/300/500`
+                };
+                videos.unshift(newVideo); // Add to beginning of raw
+                renderBoard();
+                renderGmail(); // Remove from email list
+                showToast("✅ Video added to 01_Raw folder!");
+            }, 1000);
+        }
+
+        // --- Dashboard Logic ---
+        function renderBoard() {
+            // Clear lists
+            ['01_Raw', '02_Ready_To_Post', '03_Needs_Review', '04_Published'].forEach(status => {
+                document.getElementById(`list-${status.split('_')[1].toLowerCase()}`).innerHTML = '';
+            });
+            
+            const counts = { '01_Raw': 0, '02_Ready_To_Post': 0, '03_Needs_Review': 0, '04_Published': 0 };
+
+            videos.forEach(video => {
+                counts[video.status]++;
+                const listId = `list-${getShortStatus(video.status)}`;
+                const card = document.createElement('div');
+                card.className = `video-card status-${getShortStatus(video.status)}`;
+                
+                let scoreBadge = video.score !== null 
+                    ? `<span class="viral-score ${getScoreClass(video.score)}">${video.score}/100</span>` 
+                    : `<span class="viral-score" style="background:#9ca3af">--</span>`;
+
+                card.innerHTML = `
+                    <div class="card-header">
+                        <span class="card-title">${video.name}</span>
+                        ${scoreBadge}
+                    </div>
+                    <div class="card-meta">
+                        <span>${video.date}</span>
+                    </div>
+                `;
+                card.onclick = () => openVideoDetails(video.id);
+                document.getElementById(listId).appendChild(card);
+            });
+
+            // Update Header Counts
+            document.getElementById('count-raw').innerText = counts['01_Raw'];
+            document.getElementById('count-ready').innerText = counts['02_Ready_To_Post'];
+            document.getElementById('count-review').innerText = counts['03_Needs_Review'];
+            document.getElementById('count-published').innerText = counts['04_Published'];
+
+            updateStats();
+        }
+
+        function getShortStatus(status) {
+            if(status === '01_Raw') return 'raw';
+            if(status === '02_Ready_To_Post') return 'ready';
+            if(status === '03_Needs_Review') return 'review';
+            return 'published';
+        }
+
+        function getScoreClass(score) {
+            return score >= 80 ? 'score-high' : (score >= 50 ? 'score-med' : 'score-low');
+        }
+
+        function updateStats() {
+            document.getElementById('stat-total').innerText = videos.length;
+            const scored = videos.filter(v => v.score !== null);
+            const avg = scored.length ? (scored.reduce((a,b)=>a+b.score, 0) / scored.length).toFixed(0) : 0;
+            document.getElementById('stat-score').innerText = avg;
+            document.getElementById('stat-ready').innerText = videos.filter(v => v.status === '02_Ready_To_Post').length;
+            document.getElementById('stat-review').innerText = videos.filter(v => v.status === '03_Needs_Review').length;
+        }
+
+        function runAutomationScan() {
+            if(isProcessing) return;
+            isProcessing = true;
+            const btn = document.getElementById('run-scan-btn');
+            btn.innerHTML = `<span>⏳</span> Processing...`;
+
+            const rawVideos = videos.filter(v => v.status === '01_Raw');
+            
+            if(rawVideos.length === 0) {
+                showToast("✅ No new videos in 01_Raw.");
+                isProcessing = false;
+                btn.innerHTML = `<span>▶</span> Run Automation Scan`;
+                return;
+            }
+
+            showToast(`🔍 Analyzing ${rawVideos.length} videos...`);
+
+            setTimeout(() => {
+                rawVideos.forEach(video => {
+                    video.score = Math.floor(Math.random() * (99 - 40 + 1) + 40);
+                    video.caption = generateCaption(video.name);
+                    video.tags = "#dogsoftiktok #viral #fyp";
+                    
+                    if (video.score >= 80) video.status = '02_Ready_To_Post';
+                    else if (video.score >= 50) video.status = '03_Needs_Review';
+                    // Else stays in raw
+                });
+                renderBoard();
+                isProcessing = false;
+                btn.innerHTML = `<span>▶</span> Run Automation Scan`;
+                showToast("🚀 Scan Complete!");
+            }, 1500);
+        }
+
+        // --- Modal & Editing Logic ---
+        function openVideoDetails(id) {
+            const video = videos.find(v => v.id === id);
+            if(!video) return;
+
+            currentVideoId = id;
+            document.getElementById('modal-title').innerText = video.name;
+            document.getElementById('modal-img').src = video.img;
+            document.getElementById('modal-caption').value = video.caption || "";
+            document.getElementById('modal-tags').value = video.tags || "";
+            
+            // Score
+            document.getElementById('modal-score-text').innerText = video.score !== null ? video.score : "--";
+            const scoreBar = document.getElementById('modal-score-bar');
+            scoreBar.style.width = video.score ? `${video.score}%` : '0%';
+            scoreBar.style.background = video.score >= 80 ? 'var(--success)' : (video.score >= 50 ? 'var(--warning)' : 'var(--danger)');
+
+            // Apply Settings to Preview
+            updatePreviewOverlay();
+
+            // Actions
+            const actions = document.getElementById('modal-actions');
+            actions.innerHTML = '';
+
+            if (video.status === '02_Ready_To_Post') {
+                actions.innerHTML = `<button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="publishVideo()">✅ Publish (Run Pipeline)</button>`;
+            } else if (video.status === '03_Needs_Review') {
+                actions.innerHTML = `<button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="moveVideo('02_Ready_To_Post')">Approve</button>
+                                    <button class="btn btn-secondary" style="width:100%; justify-content:center; margin-top:0.5rem; color:var(--danger);" onclick="moveVideo('01_Raw')">Reject</button>`;
+            } else if (video.status === '04_Published') {
+                actions.innerHTML = `<button class="btn btn-secondary" disabled>Published</button>`;
+            } else {
+                 actions.innerHTML = `<button class="btn btn-secondary" disabled>Run Scan first</button>`;
+            }
+
+            document.getElementById('video-modal').style.display = 'flex';
+            // Reset Progress
+            document.getElementById('modal-progress').style.display = 'none';
+            document.getElementById('modal-progress-fill').style.width = '0%';
+            document.getElementById('modal-progress-text').innerText = '';
+        }
+
+        function closeModal() {
+            document.getElementById('video-modal').style.display = 'none';
+        }
+
+        // Update preview when settings change or user types
+        document.getElementById('modal-caption').addEventListener('input', (e) => {
+            const video = videos.find(v => v.id === currentVideoId);
+            if(video) { video.caption = e.target.value; updatePreviewOverlay(); }
+        });
+
+        function updatePreviewOverlay() {
+            const video = videos.find(v => v.id === currentVideoId);
+            const wmEl = document.getElementById('preview-watermark');
+            const capEl = document.getElementById('preview-caption');
+
+            // Watermark
+            if(settings.watermark) {
+                wmEl.style.display = 'block';
+                wmEl.innerText = settings.watermarkText;
+            } else {
+                wmEl.style.display = 'none';
+            }
+
+            // Caption
+            if(settings.captions && video.caption) {
+                capEl.style.display = 'block';
+                capEl.innerText = video.caption;
+            } else {
+                capEl.style.display = 'none';
+            }
+        }
+
+        function publishVideo() {
+            const video = videos.find(v => v.id === currentVideoId);
+            if(!video) return;
+
+            const progressBar = document.getElementById('modal-progress');
+            const progressFill = document.getElementById('modal-progress-fill');
+            const progressText = document.getElementById('modal-progress-text');
+            
+            progressBar.style.display = 'block';
+            
+            // Define Pipeline Steps based on Settings
+            const steps = [];
+            if(settings.intro !== 'none') steps.push("Stitching Intro...");
+            if(settings.trim) steps.push("Trimming Silence...");
+            if(settings.captions) steps.push("Burning Captions...");
+            if(settings.watermark) steps.push("Applying Watermark...");
+            if(settings.music) steps.push("Mixing Audio...");
+            if(settings.outro !== 'none') steps.push("Stitching Outro...");
+            steps.push("Uploading to 04_Published...");
+            steps.push("Logging to Sheets...");
+
+            let stepIndex = 0;
+            
+            function runStep() {
+                if(stepIndex >= steps.length) {
+                    video.status = '04_Published';
+                    renderBoard();
+                    closeModal();
+                    showToast("🎉 Video Published Successfully!");
+                    return;
+                }
+
+                progressText.innerText = steps[stepIndex];
+                progressFill.style.width = `${((stepIndex + 1) / steps.length) * 100}%`;
+                
+                stepIndex++;
+                setTimeout(runStep, 600); // Simulate time per step
+            }
+
+            runStep();
+        }
+
+        function moveVideo(newStatus) {
+            const video = videos.find(v => v.id === currentVideoId);
+            if(video) {
+                video.status = newStatus;
+                renderBoard();
+                closeModal();
+                showToast("Moved to " + newStatus.replace('_', ' '));
+            }
+        }
+
+        // --- Settings Logic ---
+        function loadSettings() {
+            document.getElementById('setting-trim').checked = settings.trim;
+            document.getElementById('setting-music').checked = settings.music;
+            document.getElementById('setting-captions').checked = settings.captions;
+            document.getElementById('setting-watermark').checked = settings.watermark;
+            document.getElementById('setting-watermark-text').value = settings.watermarkText;
+            document.getElementById('setting-intro').value = settings.intro;
+            document.getElementById('setting-outro').value = settings.outro;
+        }
+
+        function saveSettings() {
+            settings.trim = document.getElementById('setting-trim').checked;
+            settings.music = document.getElementById('setting-music').checked;
+            settings.captions = document.getElementById('setting-captions').checked;
+            settings.watermark = document.getElementById('setting-watermark').checked;
+            settings.watermarkText = document.getElementById('setting-watermark-text').value;
+            settings.intro = document.getElementById('setting-intro').value;
+            settings.outro = document.getElementById('setting-outro').value;
+            
+            showToast("⚙️ Settings Saved!");
+            
+            // If modal is open, update preview immediately
+            if(currentVideoId) updatePreviewOverlay();
+        }
+
+        // --- Email Report ---
+        function showEmailReport() {
+            document.getElementById('report-total').innerText = videos.length;
+            document.getElementById('report-ready').innerText = videos.filter(v => v.status === '02_Ready_To_Post').length;
+            const scored = videos.filter(v => v.score !== null);
+            const avg = scored.length ? (scored.reduce((a,b)=>a+b.score, 0) / scored.length).toFixed(0) : 0;
+            document.getElementById('report-score').innerText = avg;
+            
+            document.getElementById('report-modal').style.display = 'flex';
+        }
+
+        // --- Utilities ---
+        function generateCaption(name) {
+            const templates = [
+                "I can't believe he actually did that! 😂 #dogsoftiktok",
+                "POV: When the treat bag opens. 🐕👂",
+                "Wait for the zoomies at the end! 🏃💨",
+                "Just a good boy being a good boy. ❤️",
+                "Tag a friend who needs this today. 👇"
+            ];
+            return templates[Math.floor(Math.random() * templates.length)];
+        }
+
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            el.className = 'toast';
+            el.innerText = msg;
+            container.appendChild(el);
+            setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+        }
+
+        init();
+    </script>
+</body>
+</html>
