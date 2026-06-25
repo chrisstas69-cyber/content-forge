@@ -215,7 +215,7 @@ export async function generateTTS(text: string, voice: string = 'tongtong', spee
     input: text,
     voice,
     speed,
-    response_format: 'mp3',
+    response_format: 'wav',
     stream: false,
   })
   const arrayBuffer = await response.arrayBuffer()

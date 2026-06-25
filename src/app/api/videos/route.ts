@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
-import { saveUploadedFile, ensureDirs } from '@/lib/storage'
+import { saveUploadedFile, ensureDirs, getDirs } from '@/lib/storage'
 import { processVideoPipeline, EditSettings } from '@/lib/pipeline'
+import { processImagePipeline, ImageEditSettings } from '@/lib/image-pipeline'
+import path from 'path'
+import { promises as fs } from 'fs'
+import { randomUUID } from 'crypto'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -10,36 +14,109 @@ export async function POST(req: NextRequest) {
   try {
     await ensureDirs()
     const formData = await req.formData()
-    const file = formData.get('video') as File | null
-    if (!file) {
-      return NextResponse.json({ error: 'No video file provided' }, { status: 400 })
-    }
-    const settingsRaw = formData.get('settings') as string | null
-    const settings: EditSettings = settingsRaw ? JSON.parse(settingsRaw) : {
-      burnCaptions: true,
-      watermarkPosition: 'bottom-right',
-      watermarkOpacity: 0.7,
-      watermarkScale: 0.15,
-      musicVolume: 0.2,
-      originalVolume: 1.0,
-      autoTrimSilence: false,
+
+    // Check for video file (existing behavior)
+    const videoFile = formData.get('video') as File | null
+
+    // Check for image files (new — supports single or multiple)
+    const imageFiles: File[] = []
+    const allEntries = Array.from(formData.entries())
+    for (const [key, value] of allEntries) {
+      if (key === 'images' && value instanceof File) {
+        imageFiles.push(value)
+      }
     }
 
-    const saved = await saveUploadedFile(file, file.name)
+    if (!videoFile && imageFiles.length === 0) {
+      return NextResponse.json({ error: 'No video or image files provided' }, { status: 400 })
+    }
+
+    const settingsRaw = formData.get('settings') as string | null
+
+    // ---- VIDEO path (existing) ----
+    if (videoFile) {
+      const settings: EditSettings = settingsRaw ? JSON.parse(settingsRaw) : {
+        burnCaptions: true,
+        watermarkPosition: 'bottom-right',
+        watermarkOpacity: 0.7,
+        watermarkScale: 0.15,
+        musicVolume: 0.2,
+        originalVolume: 1.0,
+        autoTrimSilence: false,
+      }
+
+      const saved = await saveUploadedFile(videoFile, videoFile.name)
+      const video = await db.video.create({
+        data: {
+          filename: videoFile.name,
+          originalPath: saved.path,
+          sizeBytes: saved.size,
+          mimeType: saved.mimeType,
+          status: 'pending',
+          editSettings: JSON.stringify(settings),
+        },
+      })
+
+      after(() => processVideoPipeline(video.id, settings).catch(err => {
+        console.error('Pipeline error:', err)
+      }))
+
+      return NextResponse.json({ video: serializeVideo(video) })
+    }
+
+    // ---- IMAGE path (new) ----
+    // Save all uploaded images to the originals folder
+    const { originals } = getDirs()
+    const savedImagePaths: string[] = []
+    let totalSize = 0
+    const firstImageName = imageFiles[0].name.replace(/\.[^.]+$/, '')
+
+    for (const imgFile of imageFiles) {
+      const ext = path.extname(imgFile.name) || '.jpg'
+      const filename = `${randomUUID()}${ext}`
+      const filepath = path.join(originals, filename)
+      const buffer = Buffer.from(await imgFile.arrayBuffer())
+      await fs.writeFile(filepath, buffer)
+      savedImagePaths.push(filepath)
+      totalSize += buffer.length
+    }
+
+    // Parse image-specific settings
+    const imgSettings: ImageEditSettings = settingsRaw
+      ? { ...JSON.parse(settingsRaw) }
+      : {
+          perImageSec: 5,
+          transitionSec: 0.7,
+          burnCaptions: true,
+          voiceoverEnabled: true,
+          voiceoverVoice: 'tongtong',
+          voiceoverTone: 'funny, energetic, engaging',
+          voiceoverReplaceOriginal: true,
+          musicVolume: 0.2,
+          watermarkPosition: 'bottom-right',
+          watermarkOpacity: 0.7,
+          watermarkScale: 0.15,
+        }
+
+    // Create a Video record — the originalPath will be updated by the pipeline
+    // once the slideshow video is generated
+    const displayName = imageFiles.length === 1
+      ? firstImageName
+      : `${firstImageName} (+${imageFiles.length - 1} more)`
+
     const video = await db.video.create({
       data: {
-        filename: file.name,
-        originalPath: saved.path,
-        sizeBytes: saved.size,
-        mimeType: saved.mimeType,
+        filename: displayName,
+        originalPath: savedImagePaths[0],  // placeholder — pipeline updates this
+        sizeBytes: totalSize,
+        mimeType: 'image/jpeg',
         status: 'pending',
-        editSettings: JSON.stringify(settings),
+        editSettings: JSON.stringify(imgSettings),
       },
     })
 
-    // Fire and forget — runs in background
-    after(() => processVideoPipeline(video.id, settings).catch(err => {
-      console.error('Pipeline error:', err)
+    after(() => processImagePipeline(video.id, savedImagePaths, imgSettings).catch(err => {
+      console.error('Image pipeline error:', err)
     }))
 
     return NextResponse.json({ video: serializeVideo(video) })

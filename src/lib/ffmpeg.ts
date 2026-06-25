@@ -20,6 +20,22 @@ function parseFps(rate: string | undefined): number {
   return den === 0 ? 0 : num / den
 }
 
+// Check if a video file has an audio stream
+export async function hasAudioStream(filePath: string): Promise<boolean> {
+  try {
+    const result = execFileSync('ffprobe', [
+      '-v', 'error',
+      '-select_streams', 'a',
+      '-show_entries', 'stream=codec_type',
+      '-of', 'csv=p=0',
+      filePath,
+    ], { encoding: 'utf-8' })
+    return result.trim().includes('audio')
+  } catch {
+    return false
+  }
+}
+
 export async function probeVideo(inputPath: string): Promise<VideoMetadata> {
   const result = execFileSync('ffprobe', [
     '-v', 'error',
@@ -158,6 +174,16 @@ export async function processVideo(
   let musicIdx = -1
   let introIdx = -1
   let outroIdx = -1
+  let voiceoverIdx = -1
+  let silentAudioIdx = -1
+
+  // Check if the main video has an audio stream — if not, add a silent audio source
+  // (needed because FFmpeg filtergraph will try to reference [mainIdx:a])
+  const hasAudio = await hasAudioStream(inputPath)
+  if (!hasAudio) {
+    parts.push('-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100')
+    silentAudioIdx = inputIdx++
+  }
 
   if (opts.musicPath) {
     parts.push('-i', opts.musicPath)
@@ -171,7 +197,6 @@ export async function processVideo(
     parts.push('-i', opts.outroPath)
     outroIdx = inputIdx++
   }
-  let voiceoverIdx = -1
   if (opts.voiceoverPath) {
     parts.push('-i', opts.voiceoverPath)
     voiceoverIdx = inputIdx++
@@ -209,14 +234,16 @@ export async function processVideo(
     chains.push(`[vmain][wm]overlay=${posMap[pos]}[vmain]`)
   }
 
-  // Audio mixing — combine original, music, and voiceover
+  // Audio mixing — combine original (or silent), music, and voiceover
   const audioChains: string[] = []
   const audioLabels: string[] = []
   const origVol = opts.originalVolume ?? 1.0
+  // If the video has no audio, use the silent audio source instead
+  const audioSourceIdx = hasAudio ? mainIdx : silentAudioIdx
 
   // Original audio (unless voiceover is replacing it)
   if (!opts.voiceoverReplaceOriginal) {
-    audioChains.push(`[${mainIdx}:a]volume=${origVol}[aorig]`)
+    audioChains.push(`[${audioSourceIdx}:a]volume=${origVol}[aorig]`)
     audioLabels.push('[aorig]')
   }
 
@@ -236,11 +263,14 @@ export async function processVideo(
 
   let finalAudioLabel = 'aout'
   if (audioLabels.length === 0) {
-    // No audio sources at all — generate silent audio matching video duration
-    chains.push(`[${mainIdx}:a]anull[aout]`)
+    // No audio sources at all — use the silent source directly
+    chains.push(`[${audioSourceIdx}:a]anull[aout]`)
   } else if (audioLabels.length === 1) {
-    // Single source — just rename
-    chains.push(`${audioChains[0].replace(/\]\[[a-z]+\]$/, '][aout]')}`)
+    // Single source — just rename the output label to [aout]
+    // The chain looks like: [N:a]volume=X[xyz] — we need to replace [xyz] with [aout]
+    const chain = audioChains[0]
+    const renamed = chain.replace(/\[[a-z]+\]$/, '[aout]')
+    chains.push(renamed)
   } else {
     // Multiple sources — mix them
     chains.push(...audioChains)
@@ -274,7 +304,7 @@ export async function processVideo(
   parts.push('-filter_complex', filterComplex)
   parts.push('-map', `[${finalVideoLabel}]`)
   parts.push('-map', `[${finalAudioLabel}]`)
-  parts.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '23')
+  parts.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '23')
   parts.push('-c:a', 'aac', '-b:a', '128k')
   parts.push('-pix_fmt', 'yuv420p')
   parts.push('-movflags', '+faststart')
@@ -350,7 +380,7 @@ export async function convertToAspectRatio(
     const proc = execFile('ffmpeg', [
       '-y', '-i', inputPath,
       '-vf', vf,
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '23',
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
       '-c:a', 'aac', '-b:a', '128k',
       '-pix_fmt', 'yuv420p',
       '-movflags', '+faststart',
@@ -381,6 +411,118 @@ export async function generateFormatThumbnail(inputPath: string, outPath: string
       outPath,
     ], (err) => {
       if (err) reject(err)
+      else resolve()
+    })
+  })
+}
+
+// ---- Image-to-Video conversion ----
+// Turns a static image into a video with a Ken Burns effect (slow zoom/pan).
+// This makes photo content feel dynamic for social media.
+
+export async function convertImageToVideo(
+  imagePath: string,
+  outputPath: string,
+  durationSec: number = 15,
+  opts: { zoom?: number; fps?: number; width?: number; height?: number } = {},
+): Promise<void> {
+  const zoom = opts.zoom ?? 1.1  // subtle zoom from 1.0x to 1.1x over the duration
+  const fps = opts.fps || 30
+  const width = opts.width || 1280
+  const height = opts.height || 720
+
+  // Ken Burns effect: slow zoom in from center
+  // zoompan filter: d = duration in frames, s = output size, z = zoom expression
+  const totalFrames = durationSec * fps
+  const vf = `scale=${width * 2}:${height * 2}:force_original_aspect_ratio=increase,crop=${width * 2}:${height * 2},zoompan=z='min(zoom+0.0015,${zoom})':d=${totalFrames}:s=${width}x${height}:fps=${fps},format=yuv420p`
+
+  await new Promise<void>((resolve, reject) => {
+    execFile('ffmpeg', [
+      '-y',
+      '-loop', '1',
+      '-i', imagePath,
+      '-t', durationSec.toString(),
+      '-vf', vf,
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      outputPath,
+    ], { maxBuffer: 1024 * 1024 * 50 }, (err, _stdout, stderr) => {
+      if (err) reject(new Error(stderr || err.message))
+      else resolve()
+    })
+  })
+}
+
+// Create a slideshow from multiple images with crossfade transitions.
+// Each image shows for `perImageSec` seconds, with `transitionSec` crossfade between them.
+export async function createSlideshow(
+  imagePaths: string[],
+  outputPath: string,
+  opts: { perImageSec?: number; transitionSec?: number; fps?: number; width?: number; height?: number } = {},
+): Promise<void> {
+  const perImageSec = opts.perImageSec || 5
+  const transitionSec = opts.transitionSec || 0.7
+  const fps = opts.fps || 30
+  const width = opts.width || 1280
+  const height = opts.height || 720
+
+  if (imagePaths.length === 0) throw new Error('No images provided')
+  if (imagePaths.length === 1) {
+    // Single image — just use convertImageToVideo
+    return convertImageToVideo(imagePaths[0], outputPath, perImageSec * 3, { fps, width, height })
+  }
+
+  // Build a filter complex that:
+  // 1. Loops each image for perImageSec
+  // 2. Applies Ken Burns zoom to each
+  // 3. Crossfades them together
+  const inputs: string[] = []
+  for (const p of imagePaths) {
+    inputs.push('-loop', '1', '-t', perImageSec.toString(), '-i', p)
+  }
+
+  const chains: string[] = []
+  const totalFramesPerImage = perImageSec * fps
+  const transitionFrames = transitionSec * fps
+
+  // Create a zoompan + scale chain for each image
+  for (let i = 0; i < imagePaths.length; i++) {
+    chains.push(
+      `[${i}:v]scale=${width * 2}:${height * 2}:force_original_aspect_ratio=increase,crop=${width * 2}:${height * 2},zoompan=z='min(zoom+0.001,1.1)':d=${totalFramesPerImage}:s=${width}x${height}:fps=${fps},format=yuv420p,setsar=1[v${i}]`
+    )
+  }
+
+  // Crossfade: xfade requires sequential chaining
+  // [v0][v1]xfade=transition=fade:duration=0.7:offset=4.3[v01]
+  // [v01][v2]xfade=transition=fade:duration=0.7:offset=8.6[v012]
+  // etc.
+  let prevLabel = 'v0'
+  for (let i = 1; i < imagePaths.length; i++) {
+    const offset = (perImageSec * i) - (transitionSec * i)
+    const outLabel = i === imagePaths.length - 1 ? 'vout' : `v${i}_acc`
+    const transition = i % 3 === 0 ? 'slideleft' : i % 3 === 1 ? 'fade' : 'dissolve'
+    chains.push(
+      `[${prevLabel}][v${i}]xfade=transition=${transition}:duration=${transitionSec}:offset=${offset}[${outLabel}]`
+    )
+    prevLabel = outLabel
+  }
+
+  const filterComplex = chains.join(';')
+  const args = [
+    '-y',
+    ...inputs,
+    '-filter_complex', filterComplex,
+    '-map', `[${prevLabel}]`,
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+    '-pix_fmt', 'yuv420p',
+    '-movflags', '+faststart',
+    outputPath,
+  ]
+
+  await new Promise<void>((resolve, reject) => {
+    execFile('ffmpeg', args, { maxBuffer: 1024 * 1024 * 50 }, (err, _stdout, stderr) => {
+      if (err) reject(new Error(stderr || err.message))
       else resolve()
     })
   })

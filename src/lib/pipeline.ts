@@ -141,7 +141,7 @@ export async function processVideoPipeline(videoId: string, settings: EditSettin
         })
         await updateVideoProgress(videoId, 56, 'Synthesizing voiceover audio (TTS)')
         const audioBuffer = await generateTTS(script.text, settings.voiceoverVoice || 'tongtong', 1.0)
-        voiceoverPath = video.originalPath + '.voiceover.mp3'
+        voiceoverPath = video.originalPath + '.voiceover.wav'
         const { promises: fs } = await import('fs')
         await fs.writeFile(voiceoverPath, audioBuffer)
         await db.video.update({ where: { id: videoId }, data: { voiceoverPath } })
