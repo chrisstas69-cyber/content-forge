@@ -123,6 +123,46 @@ Aspect ratio: 16:9 horizontal.`
   return generateImage(prompt, '1792x1024')
 }
 
+// ---- Image-to-Image (img2img) ----
+// Takes an uploaded image (e.g. user's dog photo) and transforms it into a
+// stylized thumbnail using Replicate's SDXL img2img model.
+// prompt_strength controls how much the AI changes the image (0 = identical, 1 = completely different).
+// For thumbnails we default to 0.35 — keeps the subject recognizable but adds thumbnail styling.
+
+export async function generateThumbnailFromImage(
+  imageBuffer: Buffer,
+  prompt: string,
+  opts: { promptStrength?: number; niche?: string } = {},
+): Promise<{ url: string; model: string }> {
+  const token = await getSecret('replicate.api_token')
+  if (!token) throw new Error('Replicate API token not set. Add it in Settings → API Keys.')
+
+  const promptStrength = opts.promptStrength ?? 0.35
+  const dataUri = `data:image/png;base64,${imageBuffer.toString('base64')}`
+
+  const fullPrompt = `${prompt}. Social media thumbnail style, bold, eye-catching, high contrast, professional. ${opts.niche ? `Niche: ${opts.niche}.` : ''}`
+
+  // SDXL img2img — takes an init_image and transforms it based on the prompt
+  const prediction = await createReplicatePrediction(
+    'stability-ai/sdxl:2b017d9b67edd2ee1401238df49d75da53c523f36e363881e7310ecc18f1d39c',
+    {
+      image: dataUri,
+      prompt: fullPrompt,
+      prompt_strength: promptStrength,
+      num_outputs: 1,
+      aspect_ratio: '16:9',
+    },
+  )
+
+  let finalPrediction = prediction
+  if (prediction.status !== 'succeeded') {
+    finalPrediction = await pollReplicatePrediction(prediction.urls.get)
+  }
+
+  const output = Array.isArray(finalPrediction.output) ? finalPrediction.output[0] : finalPrediction.output
+  return { url: output, model: 'sdxl-img2img' }
+}
+
 // Download a file from URL to local storage
 export async function downloadToFile(url: string, filepath: string): Promise<void> {
   await ensureDirs()

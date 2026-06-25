@@ -2,8 +2,8 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Loader2, Image as ImageIcon, Film, Wand2, Sparkles, AlertCircle } from 'lucide-react'
-import { useState } from 'react'
+import { Loader2, Image as ImageIcon, Film, Wand2, AlertCircle, Upload, X } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
 
 export function Generate() {
   const queryClient = useQueryClient()
@@ -12,42 +12,87 @@ export function Generate() {
   const [title, setTitle] = useState('')
   const [videoId, setVideoId] = useState('')
   const [generating, setGenerating] = useState(false)
+  // NEW: image upload state for img2img thumbnails
+  const [uploadedImage, setUploadedImage] = useState<File | null>(null)
+  const [uploadedPreview, setUploadedPreview] = useState<string>('')
+  const [promptStrength, setPromptStrength] = useState(0.35)
+  const fileInput = useRef<HTMLInputElement>(null)
 
   const { data: assetsData, isLoading } = useQuery({
     queryKey: ['generated-assets', tab],
     queryFn: async () => (await fetch(`/api/generate?type=${tab}`)).json(),
-    refetchInterval: 10000, // refresh every 10s to catch completed generations
+    refetchInterval: 10000,
   })
 
-  // Get videos for thumbnail target picker
   const { data: videosData } = useQuery({
     queryKey: ['videos-for-gen'],
     queryFn: async () => (await fetch('/api/videos')).json(),
     enabled: tab === 'thumbnail',
   })
 
+  // Check if Replicate is configured (for img2img)
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: async () => (await fetch('/api/social/accounts')).json(),
+  })
+  const replicateConfigured = accountsData?.platformStatus?.replicate || false
+
+  function handleImageSelect(file: File) {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file')
+      return
+    }
+    setUploadedImage(file)
+    const reader = new FileReader()
+    reader.onload = e => setUploadedPreview(e.target?.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  function clearImage() {
+    setUploadedImage(null)
+    setUploadedPreview('')
+    if (fileInput.current) fileInput.current.value = ''
+  }
+
   async function generate() {
     if (tab === 'thumbnail' && !title) return
     if (tab !== 'thumbnail' && !prompt) return
     setGenerating(true)
     try {
-      const body: any = { type: tab }
-      if (tab === 'thumbnail') {
-        body.title = title
-        if (videoId) body.videoId = videoId
+      // Use multipart/form-data if we have an uploaded image
+      if (tab === 'thumbnail' && uploadedImage) {
+        const fd = new FormData()
+        fd.append('type', 'thumbnail')
+        fd.append('title', title)
+        fd.append('image', uploadedImage)
+        fd.append('promptStrength', String(promptStrength))
+        if (videoId) fd.append('videoId', videoId)
+        const res = await fetch('/api/generate', { method: 'POST', body: fd })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Generation failed')
+        toast.success(data.message || 'Image-to-image generation started!')
+        queryClient.invalidateQueries({ queryKey: ['generated-assets', tab] })
+        clearImage()
       } else {
-        body.prompt = prompt
+        // Standard JSON request (text-only)
+        const body: any = { type: tab }
+        if (tab === 'thumbnail') {
+          body.title = title
+          if (videoId) body.videoId = videoId
+        } else {
+          body.prompt = prompt
+        }
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Generation failed')
+        toast.success(data.message || 'Asset generated!')
+        queryClient.invalidateQueries({ queryKey: ['generated-assets', tab] })
+        setPrompt('')
       }
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Generation failed')
-      toast.success(data.message || 'Asset generated!')
-      queryClient.invalidateQueries({ queryKey: ['generated-assets', tab] })
-      setPrompt('')
     } catch (err: any) {
       toast.error(err.message)
     } finally {
@@ -68,7 +113,7 @@ export function Generate() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold">AI Generation</h2>
-        <p className="text-sm text-neutral-500 mt-1">Generate thumbnails, images, and B-roll video with AI.</p>
+        <p className="text-sm text-neutral-500 mt-1">Generate thumbnails, images, and B-roll video with AI. Upload your own photo to use as a base for thumbnails.</p>
       </div>
 
       {/* Tab selector */}
@@ -104,6 +149,72 @@ export function Generate() {
                 {videos.map(v => <option key={v.id} value={v.id}>{v.aiTitle || v.filename}</option>)}
               </select>
             </div>
+
+            {/* NEW: Image upload for img2img */}
+            <div className="pt-2 border-t border-neutral-100 dark:border-neutral-800">
+              <label className="text-sm font-medium flex items-center gap-2">
+                <Upload className="size-4" />
+                Upload your own image (optional)
+              </label>
+              <p className="text-xs text-neutral-500 mt-0.5 mb-2">
+                Upload a photo (e.g. your dog) and AI will transform it into a stylized thumbnail. Without an upload, AI generates from scratch.
+              </p>
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => e.target.files?.[0] && handleImageSelect(e.target.files[0])}
+              />
+              {uploadedPreview ? (
+                <div className="relative inline-block">
+                  <img src={uploadedPreview} alt="Uploaded" className="max-h-40 rounded-lg border border-neutral-200 dark:border-neutral-800" />
+                  <button
+                    onClick={clearImage}
+                    className="absolute -top-2 -right-2 size-6 rounded-full bg-red-500 text-white flex items-center justify-center shadow-sm"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => fileInput.current?.click()}
+                  className="w-full p-6 rounded-lg border-2 border-dashed border-neutral-300 dark:border-neutral-700 hover:border-orange-400 dark:hover:border-orange-500 text-center cursor-pointer"
+                >
+                  <Upload className="size-6 mx-auto text-neutral-400 mb-1" />
+                  <p className="text-xs text-neutral-500">Click to upload your photo</p>
+                  <p className="text-[10px] text-neutral-400 mt-0.5">PNG, JPG up to 10MB</p>
+                </button>
+              )}
+
+              {/* Prompt strength slider — only shown when image is uploaded */}
+              {uploadedImage && (
+                <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900">
+                  <label className="text-xs font-medium text-blue-800 dark:text-blue-200">
+                    Style strength: {Math.round(promptStrength * 100)}%
+                  </label>
+                  <input
+                    type="range"
+                    min={0.1}
+                    max={0.8}
+                    step={0.05}
+                    value={promptStrength}
+                    onChange={e => setPromptStrength(parseFloat(e.target.value))}
+                    className="w-full mt-2"
+                  />
+                  <p className="text-[10px] text-blue-700 dark:text-blue-300 mt-1">
+                    {promptStrength < 0.3 ? 'Low — your photo stays very recognizable, minimal AI styling' :
+                     promptStrength < 0.5 ? 'Medium — balanced: your photo + thumbnail styling' :
+                     'High — more AI transformation, less like the original'}
+                  </p>
+                  {!replicateConfigured && (
+                    <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                      <AlertCircle className="size-3" /> Requires Replicate API token in Settings → API Keys
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <div>
@@ -113,11 +224,11 @@ export function Generate() {
         )}
         <button
           onClick={generate}
-          disabled={generating || (tab === 'thumbnail' ? !title : !prompt)}
+          disabled={generating || (tab === 'thumbnail' ? !title : !prompt) || (uploadedImage && !replicateConfigured)}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-medium disabled:opacity-50"
         >
           {generating ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />}
-          {generating ? 'Generating…' : `Generate ${tab === 'broll' ? 'video' : 'image'}`}
+          {generating ? 'Generating…' : uploadedImage ? 'Generate from your photo' : `Generate ${tab === 'broll' ? 'video' : 'image'}`}
         </button>
         {tab === 'broll' && (
           <p className="text-xs text-amber-600 flex items-center gap-1">
@@ -145,16 +256,23 @@ export function Generate() {
                       <img src={a.url} alt={a.prompt} className="size-full object-cover" />
                     )
                   ) : a.status === 'generating' ? (
-                    <Loader2 className="size-6 animate-spin text-neutral-400" />
+                    <div className="flex flex-col items-center gap-1">
+                      <Loader2 className="size-6 animate-spin text-neutral-400" />
+                      <span className="text-[10px] text-neutral-500">Generating…</span>
+                    </div>
                   ) : (
-                    <AlertCircle className="size-6 text-red-400" />
+                    <div className="flex flex-col items-center gap-1">
+                      <AlertCircle className="size-6 text-red-400" />
+                      <span className="text-[10px] text-red-500">Failed</span>
+                    </div>
                   )}
                 </div>
                 <div className="p-2">
                   <p className="text-[10px] text-neutral-500 truncate">{a.prompt}</p>
-                  <p className="text-[10px] mt-0.5">
-                    <span className={`px-1.5 py-0.5 rounded ${a.status === 'ready' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : a.status === 'generating' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>{a.status}</span>
-                  </p>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="text-[9px] text-neutral-400">{a.modelUsed}</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded ${a.status === 'ready' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : a.status === 'generating' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>{a.status}</span>
+                  </div>
                 </div>
               </div>
             ))}

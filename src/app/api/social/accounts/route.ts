@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { platforms } from '@/lib/social'
+import { getSecret } from '@/lib/secrets'
 
 export const runtime = 'nodejs'
 
@@ -12,6 +13,9 @@ export async function GET() {
   for (const key of Object.keys(platforms)) {
     platformStatus[key] = await platforms[key].isConfigured()
   }
+  // Add Replicate status (not in platforms map, but used for AI generation)
+  const replicateToken = await getSecret('replicate.api_token')
+  platformStatus.replicate = !!replicateToken
 
   return NextResponse.json({
     accounts: accounts.map(a => ({
