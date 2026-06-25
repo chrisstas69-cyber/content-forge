@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { platforms, pickFormatForPlatform } from '@/lib/social'
+import { generatePlatformCaptions } from '@/lib/ai'
 import { emit } from '@/lib/event-bus'
 
 export const runtime = 'nodejs'
@@ -88,10 +89,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const hashtags: string[] = body.hashtags || (v.aiHashtags ? JSON.parse(v.aiHashtags) : [])
 
   // NEW: scheduling support
-  // scheduledAt can be:
-  //   - null/undefined → publish now
-  //   - ISO string → schedule for that time
-  //   - 'optimal' → schedule at the next optimal time per platform
   const scheduleMode: 'now' | 'schedule' | 'optimal' = body.scheduleMode || 'now'
   const scheduledAtRaw: string | undefined = body.scheduledAt
 
@@ -107,14 +104,42 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: 'No connected accounts for selected platforms' }, { status: 400 })
   }
 
-  // Create post records
+  // NEW: Generate platform-specific caption variants
+  let platformCaptions: any = null
+  try {
+    const nicheSetting = await db.setting.findUnique({ where: { id: 'content.niche' } })
+    const handleSetting = await db.setting.findUnique({ where: { id: 'brand.handle' } })
+    platformCaptions = await generatePlatformCaptions(
+      title, description, hashtags, v.transcription || '',
+      { niche: nicheSetting?.value, brandHandle: handleSetting?.value },
+    )
+  } catch (err) {
+    console.error('Platform caption generation failed:', err)
+  }
+
+  // Create post records — one per account, with platform-specific captions
   const posts: any[] = []
   for (const acct of accounts) {
     let scheduledAt: Date | null = null
     if (scheduleMode === 'schedule' && scheduledAtRaw) {
       scheduledAt = new Date(scheduledAtRaw)
     } else if (scheduleMode === 'optimal') {
-      scheduledAt = getNextOptimalTime(acct.platform)
+      scheduledAt = await getNextOptimalTime(acct.platform)
+    }
+
+    // Use platform-specific caption if available
+    let postTitle = title
+    let postDescription = description
+    let postHashtags = hashtags
+    if (platformCaptions) {
+      const pc = platformCaptions[acct.platform]
+      if (pc) {
+        if (pc.title) postTitle = pc.title
+        if (pc.description) postDescription = pc.description
+        if (pc.caption) postDescription = pc.caption
+        if (pc.hashtags) postHashtags = pc.hashtags
+        if (pc.text) { postTitle = pc.text; postDescription = ''; postHashtags = [] }
+      }
     }
 
     const post = await db.post.create({
@@ -123,9 +148,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         accountId: acct.id,
         platform: acct.platform,
         status: scheduledAt ? 'scheduled' : 'pending',
-        title,
-        description,
-        hashtags: JSON.stringify(hashtags),
+        title: postTitle,
+        description: postDescription,
+        hashtags: JSON.stringify(postHashtags),
         scheduledAt,
       },
     })
@@ -138,7 +163,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       for (const post of posts) {
         await publishPost(post.id)
       }
-      // Mark video as published
       await db.video.update({ where: { id: v.id }, data: { status: 'published' } })
     })
   }
@@ -151,34 +175,44 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       scheduledAt: p.scheduledAt,
     })),
     scheduled: scheduleMode !== 'now',
+    platformCaptions: platformCaptions ? Object.keys(platformCaptions) : [],
   })
 }
 
-// Optimal posting times per platform (in America/New_York per user's timezone setting)
-// These are well-documented industry averages from Hootsuite/Sprout Social studies
-const OPTIMAL_TIMES: Record<string, { hour: number; minute: number }[]> = {
-  youtube:   [{ hour: 15, minute: 0 }, { hour: 12, minute: 0 }],   // 3pm, noon ET
-  tiktok:    [{ hour: 9, minute: 0 }, { hour: 12, minute: 0 }, { hour: 19, minute: 0 }], // 9am, noon, 7pm ET
-  instagram: [{ hour: 11, minute: 0 }, { hour: 14, minute: 0 }, { hour: 19, minute: 0 }], // 11am, 2pm, 7pm ET
-  facebook:  [{ hour: 9, minute: 0 }, { hour: 13, minute: 0 }],   // 9am, 1pm ET
-  x:         [{ hour: 9, minute: 0 }, { hour: 12, minute: 0 }, { hour: 17, minute: 0 }], // 9am, noon, 5pm ET
+// Optimal posting times per platform (defaults)
+const DEFAULT_OPTIMAL_TIMES: Record<string, { hour: number; minute: number }[]> = {
+  youtube:   [{ hour: 15, minute: 0 }, { hour: 12, minute: 0 }],
+  tiktok:    [{ hour: 9, minute: 0 }, { hour: 12, minute: 0 }, { hour: 19, minute: 0 }],
+  instagram: [{ hour: 11, minute: 0 }, { hour: 14, minute: 0 }, { hour: 19, minute: 0 }],
+  facebook:  [{ hour: 9, minute: 0 }, { hour: 13, minute: 0 }],
+  x:         [{ hour: 9, minute: 0 }, { hour: 12, minute: 0 }, { hour: 17, minute: 0 }],
 }
 
-function getNextOptimalTime(platform: string): Date {
-  const slots = OPTIMAL_TIMES[platform] || OPTIMAL_TIMES.youtube
+// NEW: Smart scheduling — uses analytics data to find when THIS user's audience is most active
+async function getNextOptimalTime(platform: string): Promise<Date> {
+  // Try to find optimal times from this user's actual analytics
+  const customTimes = await db.setting.findUnique({ where: { id: `optimal_times.${platform}` } })
+  let slots: { hour: number; minute: number }[]
+  if (customTimes) {
+    try {
+      slots = JSON.parse(customTimes.value)
+    } catch {
+      slots = DEFAULT_OPTIMAL_TIMES[platform] || DEFAULT_OPTIMAL_TIMES.youtube
+    }
+  } else {
+    slots = DEFAULT_OPTIMAL_TIMES[platform] || DEFAULT_OPTIMAL_TIMES.youtube
+  }
+
   const now = new Date()
-  // Find next slot — try today's slots first, then tomorrow
   for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
     for (const slot of slots) {
       const candidate = new Date(now)
       candidate.setDate(candidate.getDate() + dayOffset)
       candidate.setHours(slot.hour, slot.minute, 0, 0)
-      // Skip past times today
       if (candidate.getTime() > now.getTime() + 5 * 60 * 1000) {
         return candidate
       }
     }
   }
-  // Fallback: 24 hours from now
   return new Date(Date.now() + 24 * 60 * 60 * 1000)
 }

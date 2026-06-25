@@ -72,6 +72,8 @@ export const SECRET_FIELDS: SecretField[] = [
   // X (Twitter)
   { id: 'x.client_id', label: 'Client ID', platform: 'x', required: true, helpUrl: 'https://developer.twitter.com/en/portal/dashboard' },
   { id: 'x.client_secret', label: 'Client Secret', platform: 'x', required: true },
+  // Replicate (for AI video generation)
+  { id: 'replicate.api_token', label: 'API Token', platform: 'replicate', required: false, placeholder: 'r8_xxxxx', helpUrl: 'https://replicate.com/account/api-tokens' },
 ]
 
 export const PLATFORM_GROUPS: { id: string; label: string; description: string; helpUrl?: string }[] = [
@@ -79,6 +81,7 @@ export const PLATFORM_GROUPS: { id: string; label: string; description: string; 
   { id: 'tiktok', label: 'TikTok', description: 'TikTok Developers app with video.upload + video.publish scopes', helpUrl: 'https://developers.tiktok.com/app/quickstart' },
   { id: 'meta', label: 'Instagram + Facebook', description: 'One Meta app powers both Instagram and Facebook publishing', helpUrl: 'https://developers.facebook.com/apps/' },
   { id: 'x', label: 'X (Twitter)', description: 'Twitter Developer Portal project with OAuth 2.0', helpUrl: 'https://developer.twitter.com/en/portal/dashboard' },
+  { id: 'replicate', label: 'Replicate (AI Video Gen)', description: 'Optional — for AI text-to-video B-roll generation. Images use built-in AI (no key needed).', helpUrl: 'https://replicate.com/account/api-tokens' },
 ]
 
 // ---- DB-backed secret accessors ----

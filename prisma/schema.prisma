@@ -182,3 +182,52 @@ model AgentMessage {
   createdAt      DateTime @default(now())
   @@index([conversationId])
 }
+
+/// AI-generated content ideas
+model Idea {
+  id              String   @id @default(cuid())
+  title           String
+  concept         String   // 1-2 sentence description
+  scriptOutline   String?  // bullet-point script outline
+  format          String   // 9:16 | 16:9 | 1:1 | carousel
+  predictedViralScore Int  @default(50)
+  source          String   // trends | insights | analytics | manual | competitor
+  sourceData      String?  // JSON: what trends/insights informed this idea
+  niche           String
+  status          String   @default("new") // new | generating | generated | used | rejected
+  generatedVideoId String? // if used to generate a video
+  createdAt       DateTime @default(now())
+  @@index([niche, status])
+  @@index([createdAt])
+}
+
+/// AI-generated assets (B-roll, thumbnails, images)
+model GeneratedAsset {
+  id           String   @id @default(cuid())
+  type         String   // broll | thumbnail | image | stylized_video
+  prompt       String
+  filePath     String?  // local path if downloaded
+  publicUrl    String?  // public URL (from Replicate)
+  thumbnailUrl String?  // for videos
+  modelUsed    String   // which AI model was used
+  status       String   @default("pending") // pending | generating | ready | failed
+  errorMessage String?
+  metadata     String?  // JSON: model-specific data
+  videoId      String?  // if associated with a video (thumbnail)
+  createdAt    DateTime @default(now())
+  @@index([type, status])
+}
+
+/// Insights from analytics (learning loop)
+model Insight {
+  id         String   @id @default(cuid())
+  type       String   // pattern | opportunity | underperformer | recommendation
+  content    String   // the insight text
+  data       String   // JSON: supporting metrics
+  niche      String
+  confidence Int      @default(50) // 0-100
+  freshness  DateTime @default(now())
+  createdAt  DateTime @default(now())
+  @@index([niche, type])
+  @@index([freshness])
+}

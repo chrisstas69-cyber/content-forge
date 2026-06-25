@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Film, Loader2, TrendingUp, CheckCircle2, XCircle, Clock, Share2, CalendarClock, Layers, Sparkles } from 'lucide-react'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar'
 
 export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const { data: stats, isLoading } = useQuery({
@@ -61,8 +61,20 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
               <span>Upload new videos</span>
               <span>→</span>
             </button>
+            <button onClick={() => onNavigate('ideas')} className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 text-sm font-medium text-orange-800 dark:text-orange-200 hover:bg-orange-100 dark:hover:bg-orange-900/40">
+              <span>✨ Generate content ideas (AI)</span>
+              <span>→</span>
+            </button>
+            <button onClick={() => onNavigate('generate')} className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-800">
+              <span>Generate AI thumbnails &amp; B-roll</span>
+              <span>→</span>
+            </button>
             <button onClick={() => onNavigate('library')} className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-800">
               <span>View video library</span>
+              <span>→</span>
+            </button>
+            <button onClick={() => onNavigate('calendar')} className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-800">
+              <span>Content calendar</span>
               <span>→</span>
             </button>
             <button onClick={() => onNavigate('social')} className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-800">

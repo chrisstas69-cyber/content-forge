@@ -8,10 +8,13 @@ import { ApiKeys } from '@/components/dashboard/api-keys'
 import { AgentChat } from '@/components/dashboard/agent-chat'
 import { Trends } from '@/components/dashboard/trends'
 import { Analytics } from '@/components/dashboard/analytics'
+import { Ideas, Insights } from '@/components/dashboard/ideas-insights'
+import { Generate } from '@/components/dashboard/generate'
+import { Calendar } from '@/components/dashboard/calendar'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -71,6 +74,10 @@ export default function Home() {
         {tab === 'scheduled' && <Scheduled />}
         {tab === 'trends' && <Trends />}
         {tab === 'analytics' && <Analytics />}
+        {tab === 'ideas' && <Ideas />}
+        {tab === 'insights' && <Insights />}
+        {tab === 'generate' && <Generate />}
+        {tab === 'calendar' && <Calendar />}
         {tab === 'settings' && <Settings />}
         {tab === 'assets' && <Assets />}
         {tab === 'apikeys' && <ApiKeys />}
@@ -82,17 +89,21 @@ export default function Home() {
   )
 }
 
-import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon } from 'lucide-react'
 
 function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const items: { id: Tab; label: string; icon: any }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'upload', label: 'Upload', icon: UploadCloud },
     { id: 'library', label: 'Library', icon: Film },
+    { id: 'ideas', label: 'Ideas', icon: Lightbulb },
+    { id: 'generate', label: 'Generate', icon: Wand2 },
     { id: 'social', label: 'Social', icon: Share2 },
     { id: 'scheduled', label: 'Scheduled', icon: CalendarClock },
+    { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
     { id: 'trends', label: 'Trends', icon: TrendingUp },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'insights', label: 'Insights', icon: Target },
     { id: 'apikeys', label: 'API Keys', icon: KeyRound },
     { id: 'assets', label: 'Assets', icon: ImageIcon },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },

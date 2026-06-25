@@ -221,3 +221,80 @@ export async function generateTTS(text: string, voice: string = 'tongtong', spee
   const arrayBuffer = await response.arrayBuffer()
   return Buffer.from(new Uint8Array(arrayBuffer))
 }
+
+// ---- Per-platform caption variants ----
+export interface PlatformCaptions {
+  youtube: { title: string; description: string; hashtags: string[] }
+  tiktok: { title: string; description: string; hashtags: string[] }
+  instagram: { caption: string; hashtags: string[] }
+  facebook: { title: string; description: string }
+  x: { text: string }
+}
+
+export async function generatePlatformCaptions(
+  baseTitle: string,
+  baseDescription: string,
+  baseHashtags: string[],
+  transcript: string,
+  opts: { niche?: string; brandHandle?: string } = {},
+): Promise<PlatformCaptions> {
+  const zai = await getZai()
+  const niche = opts.niche || 'pet content'
+  const handle = opts.brandHandle || '@yourhandle'
+
+  const prompt = `You are a social media copywriter specializing in ${niche}.
+Take this base content and create platform-specific variants optimized for each platform's culture and constraints.
+
+Base title: ${baseTitle}
+Base description: ${baseDescription}
+Base hashtags: ${baseHashtags.join(', ')}
+Transcript excerpt: ${(transcript || '').slice(0, 500)}
+Brand handle: ${handle}
+
+Platform guidelines:
+- YouTube: SEO-optimized title (under 100 chars), detailed description with timestamps/links, 10-15 hashtags
+- TikTok: Punchy title (under 150 chars), casual description with emojis, 4-6 trending hashtags
+- Instagram: Engaging caption with emojis and line breaks (under 2200 chars), 15-30 hashtags at the end
+- Facebook: Conversational title + description (under 500 chars), minimal hashtags (2-3)
+- X: Single tweet under 280 chars including hashtags, punchy and shareable
+
+Return ONLY valid JSON:
+{
+  "youtube": { "title": "...", "description": "...", "hashtags": ["...", "..."] },
+  "tiktok": { "title": "...", "description": "...", "hashtags": ["...", "..."] },
+  "instagram": { "caption": "...", "hashtags": ["...", "..."] },
+  "facebook": { "title": "...", "description": "..." },
+  "x": { "text": "..." }
+}`
+
+  const result = await zai.chat.completions.create({
+    messages: [
+      { role: 'system', content: 'You are a JSON-only assistant. Output valid JSON, no extra text.' },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.8,
+  })
+  const content = result.choices?.[0]?.message?.content || ''
+  const match = content.match(/\{[\s\S]*\}/)
+  if (!match) {
+    // Fallback to base content
+    return {
+      youtube: { title: baseTitle, description: baseDescription, hashtags: baseHashtags },
+      tiktok: { title: baseTitle, description: baseDescription, hashtags: baseHashtags.slice(0, 6) },
+      instagram: { caption: `${baseDescription}\n\n${baseHashtags.map(h => `#${h}`).join(' ')}`, hashtags: baseHashtags },
+      facebook: { title: baseTitle, description: baseDescription },
+      x: { text: `${baseTitle}\n\n${baseHashtags.slice(0, 3).map(h => `#${h}`).join(' ')}`.slice(0, 280) },
+    }
+  }
+  try {
+    return JSON.parse(match[0])
+  } catch {
+    return {
+      youtube: { title: baseTitle, description: baseDescription, hashtags: baseHashtags },
+      tiktok: { title: baseTitle, description: baseDescription, hashtags: baseHashtags.slice(0, 6) },
+      instagram: { caption: `${baseDescription}\n\n${baseHashtags.map(h => `#${h}`).join(' ')}`, hashtags: baseHashtags },
+      facebook: { title: baseTitle, description: baseDescription },
+      x: { text: `${baseTitle}\n\n${baseHashtags.slice(0, 3).map(h => `#${h}`).join(' ')}`.slice(0, 280) },
+    }
+  }
+}

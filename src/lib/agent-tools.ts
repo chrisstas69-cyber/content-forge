@@ -250,6 +250,196 @@ export const agentTools: AgentTool[] = [
       return { total, ready, published, failed, processing, scheduled, avgViralScore: avgScore }
     },
   },
+  // ---- NEW: Ideation tools ----
+  {
+    name: 'generate_ideas',
+    description: 'Generate fresh content ideas based on current trends, insights, and the user\'s analytics. Use when the user asks "what should I make?" or wants content suggestions.',
+    parameters: {
+      type: 'object',
+      properties: {
+        count: { type: 'number', description: 'Number of ideas to generate (default 5, max 10)' },
+      },
+    },
+    handler: async (args) => {
+      const { generateIdeas } = await import('@/lib/ideation')
+      const result = await generateIdeas({ count: Math.min(args.count || 5, 10) })
+      return {
+        generated: result.generated,
+        ideas: result.ideas.map(i => ({
+          id: i.id,
+          title: i.title,
+          concept: i.concept,
+          scriptOutline: i.scriptOutline,
+          format: i.format,
+          predictedViralScore: i.predictedViralScore,
+          source: i.source,
+        })),
+      }
+    },
+  },
+  {
+    name: 'list_ideas',
+    description: 'List saved content ideas. Use to show the user their idea backlog.',
+    parameters: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', description: 'Filter by status: new, used, rejected' },
+      },
+    },
+    handler: async (args) => {
+      const nicheSetting = await db.setting.findUnique({ where: { id: 'content.niche' } })
+      const niche = nicheSetting?.value || 'pet content'
+      const where: any = { niche }
+      if (args.status) where.status = args.status
+      const ideas = await db.idea.findMany({ where, orderBy: { createdAt: 'desc' }, take: 20 })
+      return {
+        count: ideas.length,
+        ideas: ideas.map(i => ({
+          id: i.id,
+          title: i.title,
+          concept: i.concept,
+          format: i.format,
+          predictedViralScore: i.predictedViralScore,
+          source: i.source,
+          status: i.status,
+          createdAt: i.createdAt.toISOString(),
+        })),
+      }
+    },
+  },
+  {
+    name: 'get_insights',
+    description: 'Get performance insights from the learning loop — patterns, opportunities, underperformers, and recommendations based on the user\'s actual analytics.',
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      const nicheSetting = await db.setting.findUnique({ where: { id: 'content.niche' } })
+      const niche = nicheSetting?.value || 'pet content'
+      const insights = await db.insight.findMany({
+        where: { niche },
+        orderBy: [{ confidence: 'desc' }, { freshness: 'desc' }],
+        take: 10,
+      })
+      return {
+        count: insights.length,
+        insights: insights.map(i => ({
+          type: i.type,
+          content: i.content,
+          confidence: i.confidence,
+          data: i.data ? JSON.parse(i.data) : null,
+          freshness: i.freshness.toISOString(),
+        })),
+      }
+    },
+  },
+  {
+    name: 'refresh_insights',
+    description: 'Re-analyze the user\'s analytics and generate fresh insights. Use when the user asks "why did my video underperform?" or wants performance analysis.',
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      const { refreshInsights } = await import('@/lib/insights')
+      const result = await refreshInsights()
+      return { ok: true, ...result, message: `Generated ${result.generated} insights` }
+    },
+  },
+  {
+    name: 'generate_thumbnail',
+    description: 'Generate an AI thumbnail image for a video. Uses built-in AI image generation (no API key needed).',
+    parameters: {
+      type: 'object',
+      properties: {
+        videoId: { type: 'string', description: 'The video to generate a thumbnail for' },
+        title: { type: 'string', description: 'The video title (used as inspiration)' },
+      },
+      required: ['title'],
+    },
+    handler: async (args) => {
+      const { generateThumbnail } = await import('@/lib/generate')
+      const nicheSetting = await db.setting.findUnique({ where: { id: 'content.niche' } })
+      const niche = nicheSetting?.value || 'pet content'
+      const asset = await db.generatedAsset.create({
+        data: {
+          type: 'thumbnail',
+          prompt: args.title,
+          modelUsed: 'zai-image',
+          status: 'generating',
+          videoId: args.videoId,
+        },
+      })
+      try {
+        const buffer = await generateThumbnail(args.title, niche)
+        const { promises: fs } = await import('fs')
+        const path = await import('path')
+        const { getDirs, ensureDirs } = await import('@/lib/storage')
+        await ensureDirs()
+        const filepath = path.join(getDirs().assets, `thumb_${asset.id}.png`)
+        await fs.writeFile(filepath, buffer)
+        const updated = await db.generatedAsset.update({
+          where: { id: asset.id },
+          data: { status: 'ready', filePath: filepath, publicUrl: `/api/generate/assets/${asset.id}` },
+        })
+        return { ok: true, assetId: asset.id, url: `/api/generate/assets/${asset.id}` }
+      } catch (err: any) {
+        await db.generatedAsset.update({ where: { id: asset.id }, data: { status: 'failed', errorMessage: err?.message } })
+        return { error: err?.message || 'Thumbnail generation failed' }
+      }
+    },
+  },
+  {
+    name: 'generate_broll',
+    description: 'Generate AI B-roll video from a text prompt using Replicate (requires Replicate API token). Returns immediately; check back for the video. Use for cinematic shots you didn\'t film.',
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: 'Description of the video to generate, e.g. "cinematic shot of a golden retriever running on a beach at sunset"' },
+      },
+      required: ['prompt'],
+    },
+    handler: async (args) => {
+      const { isReplicateConfigured } = await import('@/lib/generate')
+      const configured = await isReplicateConfigured()
+      if (!configured) {
+        return { error: 'Replicate API token not set. Ask the user to add it in Settings → API Keys.' }
+      }
+      const asset = await db.generatedAsset.create({
+        data: { type: 'broll', prompt: args.prompt, modelUsed: 'stable-video-diffusion', status: 'generating' },
+      })
+      // Don't await — return immediately, generation continues in background
+      // (The /api/generate endpoint handles the actual generation with after())
+      return {
+        ok: true,
+        assetId: asset.id,
+        message: 'Video generation started. This takes 2-5 minutes. Check the Generate tab or ask me to check status later.',
+      }
+    },
+  },
+  {
+    name: 'list_generated_assets',
+    description: 'List AI-generated assets (thumbnails, B-roll, images) and their status.',
+    parameters: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', description: 'Filter by type: thumbnail, broll, image' },
+      },
+    },
+    handler: async (args) => {
+      const where: any = {}
+      if (args.type) where.type = args.type
+      const assets = await db.generatedAsset.findMany({ where, orderBy: { createdAt: 'desc' }, take: 20 })
+      return {
+        count: assets.length,
+        assets: assets.map(a => ({
+          id: a.id,
+          type: a.type,
+          prompt: a.prompt,
+          status: a.status,
+          modelUsed: a.modelUsed,
+          url: a.publicUrl ? `/api/generate/assets/${a.id}` : null,
+          errorMessage: a.errorMessage,
+          createdAt: a.createdAt.toISOString(),
+        })),
+      }
+    },
+  },
 ]
 
 export function getToolByName(name: string): AgentTool | undefined {
