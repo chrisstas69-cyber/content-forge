@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
+import { ThemeProvider } from 'next-themes'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(() => new QueryClient({
@@ -9,5 +10,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
       queries: { staleTime: 5000, refetchOnWindowFocus: false },
     },
   }))
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  return (
+    <QueryClientProvider client={client}>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        {children}
+      </ThemeProvider>
+    </QueryClientProvider>
+  )
 }
+

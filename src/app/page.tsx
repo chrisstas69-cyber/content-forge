@@ -91,7 +91,41 @@ export default function Home() {
   )
 }
 
-import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, Sun, Moon } from 'lucide-react'
+import { useTheme } from 'next-themes'
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <div className="w-14 h-7 rounded-full bg-neutral-200 dark:bg-neutral-800 animate-pulse" />
+    )
+  }
+
+  const isDark = theme === 'dark'
+
+  return (
+    <button
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      className="relative flex items-center justify-between w-14 h-7 px-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 cursor-pointer transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 shadow-inner"
+      aria-label="Toggle theme"
+    >
+      <div
+        className={`absolute w-5 h-5 rounded-full bg-white dark:bg-neutral-900 shadow transition-transform duration-300 ease-out transform ${
+          isDark ? 'translate-x-6' : 'translate-x-0'
+        }`}
+      />
+      <Sun className="size-3.5 text-amber-500 z-10" />
+      <Moon className="size-3.5 text-neutral-400 dark:text-amber-400 z-10" />
+    </button>
+  )
+}
 
 function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const items: { id: Tab; label: string; icon: any }[] = [
@@ -124,34 +158,37 @@ function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
               <p className="text-[10px] text-neutral-500 leading-none mt-1">AI Content Automation</p>
             </div>
           </div>
-          <nav className="hidden md:flex items-center gap-1">
-            {items.map(item => {
-              const Icon = item.icon
-              const active = tab === item.id
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setTab(item.id)}
-                  className={`inline-flex items-center gap-2 px-3 h-9 rounded-lg text-sm font-medium transition-colors ${
-                    active ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                  }`}
-                >
-                  <Icon className="size-4" />
-                  {item.label}
-                </button>
-              )
-            })}
-          </nav>
-          {/* Mobile dropdown */}
-          <select
-            className="md:hidden px-3 h-9 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-sm"
-            value={tab}
-            onChange={e => setTab(e.target.value as Tab)}
-          >
-            {items.map(item => (
-              <option key={item.id} value={item.id}>{item.label}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-4">
+            <nav className="hidden md:flex items-center gap-1">
+              {items.map(item => {
+                const Icon = item.icon
+                const active = tab === item.id
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setTab(item.id)}
+                    className={`inline-flex items-center gap-2 px-3 h-9 rounded-lg text-sm font-medium transition-colors ${
+                      active ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                    }`}
+                  >
+                    <Icon className="size-4" />
+                    {item.label}
+                  </button>
+                )
+              })}
+            </nav>
+            {/* Mobile dropdown */}
+            <select
+              className="md:hidden px-3 h-9 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-sm"
+              value={tab}
+              onChange={e => setTab(e.target.value as Tab)}
+            >
+              {items.map(item => (
+                <option key={item.id} value={item.id}>{item.label}</option>
+              ))}
+            </select>
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </header>
