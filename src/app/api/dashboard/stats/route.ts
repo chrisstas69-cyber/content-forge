@@ -22,6 +22,10 @@ export async function GET() {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
   const recentVideos = await db.video.count({ where: { createdAt: { gte: sevenDaysAgo } } })
 
+  // Scheduled posts
+  const scheduled = await db.post.count({ where: { status: 'scheduled' } })
+  const totalFormats = await db.video.count({ where: { NOT: { processedFormats: null } } })
+
   return NextResponse.json({
     total,
     ready,
@@ -37,5 +41,7 @@ export async function GET() {
     publishedPosts,
     avgViralScore: avgScore,
     recentVideos,
+    scheduled,
+    totalFormats,
   })
 }

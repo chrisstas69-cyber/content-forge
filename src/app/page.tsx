@@ -8,7 +8,7 @@ import { ApiKeys } from '@/components/dashboard/api-keys'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -65,6 +65,7 @@ export default function Home() {
         {tab === 'upload' && <Upload />}
         {tab === 'library' && <Library />}
         {tab === 'social' && <SocialAccounts onNavigate={setTab} />}
+        {tab === 'scheduled' && <Scheduled />}
         {tab === 'settings' && <Settings />}
         {tab === 'assets' && <Assets />}
         {tab === 'apikeys' && <ApiKeys />}
@@ -75,7 +76,7 @@ export default function Home() {
   )
 }
 
-import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock } from 'lucide-react'
 
 function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const items: { id: Tab; label: string; icon: any }[] = [
@@ -83,6 +84,7 @@ function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     { id: 'upload', label: 'Upload', icon: UploadCloud },
     { id: 'library', label: 'Library', icon: Film },
     { id: 'social', label: 'Social', icon: Share2 },
+    { id: 'scheduled', label: 'Scheduled', icon: CalendarClock },
     { id: 'apikeys', label: 'API Keys', icon: KeyRound },
     { id: 'assets', label: 'Assets', icon: ImageIcon },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
@@ -263,6 +265,9 @@ function PublishDialog({ v, onClose, onPublished }: { v: any; onClose: () => voi
   const [description, setDescription] = useState(v.aiDescription || '')
   const [hashtags, setHashtags] = useState((v.aiHashtags || []).join(', '))
   const [publishing, setPublishing] = useState(false)
+  // NEW: scheduling state
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'optimal' | 'schedule'>('now')
+  const [scheduledAt, setScheduledAt] = useState<string>('')
 
   const accounts: any[] = accountsData?.accounts || []
   const connected = accounts.filter(a => a.connected)
@@ -278,11 +283,19 @@ function PublishDialog({ v, onClose, onPublished }: { v: any; onClose: () => voi
           title,
           description,
           hashtags: hashtags.split(',').map(s => s.trim()).filter(Boolean),
+          scheduleMode,
+          scheduledAt: scheduleMode === 'schedule' ? scheduledAt : undefined,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed')
-      toast.success(`Publishing to ${selected.length} platform(s)…`)
+      if (scheduleMode === 'now') {
+        toast.success(`Publishing to ${selected.length} platform(s)…`)
+      } else if (scheduleMode === 'optimal') {
+        toast.success(`Scheduled at optimal times for each platform ✓`)
+      } else {
+        toast.success(`Scheduled for ${new Date(scheduledAt).toLocaleString()} ✓`)
+      }
       onPublished()
       onClose()
     } catch (err: any) {
@@ -290,6 +303,12 @@ function PublishDialog({ v, onClose, onPublished }: { v: any; onClose: () => voi
     } finally {
       setPublishing(false)
     }
+  }
+
+  // Get suggested optimal times for display
+  const getOptimalPreview = () => {
+    const next24h = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    return next24h.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
   }
 
   return (
@@ -302,6 +321,16 @@ function PublishDialog({ v, onClose, onPublished }: { v: any; onClose: () => voi
           </div>
           {v.processedUrl && (
             <video src={v.processedUrl} controls className="w-full rounded-lg max-h-60 bg-black" />
+          )}
+          {/* NEW: formats badge */}
+          {v.formats?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {v.formats.map((f: string) => (
+                <span key={f} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 font-mono">
+                  ✓ {f}
+                </span>
+              ))}
+            </div>
           )}
           <div>
             <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Title</label>
@@ -337,14 +366,49 @@ function PublishDialog({ v, onClose, onPublished }: { v: any; onClose: () => voi
               </div>
             )}
           </div>
+          {/* NEW: scheduling section */}
+          <div className="pt-2 border-t border-neutral-100 dark:border-neutral-800">
+            <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-2 block">When to publish</label>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              {(['now', 'optimal', 'schedule'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setScheduleMode(mode)}
+                  className={`px-3 py-2 rounded-md text-xs font-medium border ${scheduleMode === mode ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300' : 'border-neutral-200 dark:border-neutral-800'}`}
+                >
+                  {mode === 'now' ? 'Publish now' : mode === 'optimal' ? 'Optimal times' : 'Pick time'}
+                </button>
+              ))}
+            </div>
+            {scheduleMode === 'optimal' && (
+              <p className="text-xs text-neutral-500">
+                Each platform will be scheduled at its next optimal time (e.g. YouTube 3pm ET, TikTok 7pm ET, Instagram 11am/2pm/7pm ET).
+                Next available slot: around {getOptimalPreview()}.
+              </p>
+            )}
+            {scheduleMode === 'schedule' && (
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={e => setScheduledAt(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm"
+              />
+            )}
+          </div>
           <div className="flex gap-2 pt-2">
             <button onClick={onClose} className="flex-1 px-4 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 text-sm font-medium">Cancel</button>
             <button
               onClick={publish}
-              disabled={publishing || selected.length === 0}
+              disabled={publishing || selected.length === 0 || (scheduleMode === 'schedule' && !scheduledAt)}
               className="flex-1 px-4 py-2 rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 text-sm font-medium disabled:opacity-50"
             >
-              {publishing ? 'Publishing…' : `Publish to ${selected.length}`}
+              {publishing
+                ? 'Working…'
+                : scheduleMode === 'now'
+                  ? `Publish to ${selected.length}`
+                  : scheduleMode === 'optimal'
+                    ? `Schedule optimal`
+                    : `Schedule post`}
             </button>
           </div>
         </div>
@@ -427,6 +491,169 @@ function SocialAccounts({ onNavigate }: { onNavigate: (t: Tab) => void }) {
           Note: Instagram &amp; Facebook require videos hosted on a public URL (S3, Cloudinary, etc.) for publishing. YouTube, TikTok, and X support direct file upload.
         </p>
       </div>
+    </div>
+  )
+}
+
+// === Scheduled ===
+function Scheduled() {
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['scheduled-posts'],
+    queryFn: async () => (await fetch('/api/posts/scheduled')).json(),
+    refetchInterval: 15000, // refresh every 15s so scheduled posts show as published when they go live
+  })
+  const queryClient = useQueryClient()
+  const posts: any[] = data?.posts || []
+
+  const statusColors: Record<string, string> = {
+    scheduled: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    uploading: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    pending: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400',
+    published: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    failed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  }
+
+  if (isLoading) {
+    return <div className="text-center py-12 text-neutral-500">Loading scheduled posts…</div>
+  }
+
+  // Group posts
+  const scheduled = posts.filter(p => p.status === 'scheduled')
+  const inProgress = posts.filter(p => p.status === 'uploading' || p.status === 'pending')
+  const recentlyPublished = posts.filter(p => p.status === 'published')
+  const failed = posts.filter(p => p.status === 'failed')
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold">Scheduled Posts</h2>
+        <p className="text-sm text-neutral-500 mt-1">
+          Posts go live automatically at their scheduled time. Vercel Cron checks every minute — make sure <code>CRON_SECRET</code> is set.
+        </p>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-3">
+          <p className="text-2xl font-bold text-blue-600">{scheduled.length}</p>
+          <p className="text-xs text-neutral-500">Scheduled</p>
+        </div>
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-3">
+          <p className="text-2xl font-bold text-amber-600">{inProgress.length}</p>
+          <p className="text-xs text-neutral-500">In progress</p>
+        </div>
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-3">
+          <p className="text-2xl font-bold text-emerald-600">{recentlyPublished.length}</p>
+          <p className="text-xs text-neutral-500">Published (24h)</p>
+        </div>
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-3">
+          <p className="text-2xl font-bold text-red-600">{failed.length}</p>
+          <p className="text-xs text-neutral-500">Failed (24h)</p>
+        </div>
+      </div>
+
+      {/* Scheduled list */}
+      {scheduled.length > 0 && (
+        <div>
+          <h3 className="font-semibold text-sm mb-2">Upcoming</h3>
+          <div className="space-y-2">
+            {scheduled.map(p => (
+              <ScheduledPostCard key={p.id} p={p} statusColor={statusColors[p.status]} onCancel={async () => {
+                await fetch('/api/posts/scheduled', { method: 'DELETE', body: JSON.stringify({ id: p.id }), headers: { 'Content-Type': 'application/json' } })
+                toast.success('Scheduled post cancelled')
+                refetch()
+                queryClient.invalidateQueries({ queryKey: ['videos'] })
+              }} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {inProgress.length > 0 && (
+        <div>
+          <h3 className="font-semibold text-sm mb-2">Publishing now</h3>
+          <div className="space-y-2">
+            {inProgress.map(p => (
+              <ScheduledPostCard key={p.id} p={p} statusColor={statusColors[p.status]} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {failed.length > 0 && (
+        <div>
+          <h3 className="font-semibold text-sm mb-2">Recently failed</h3>
+          <div className="space-y-2">
+            {failed.map(p => (
+              <ScheduledPostCard key={p.id} p={p} statusColor={statusColors[p.status]} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {recentlyPublished.length > 0 && (
+        <div>
+          <h3 className="font-semibold text-sm mb-2">Recently published</h3>
+          <div className="space-y-2">
+            {recentlyPublished.map(p => (
+              <ScheduledPostCard key={p.id} p={p} statusColor={statusColors[p.status]} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {posts.length === 0 && (
+        <div className="text-center py-16">
+          <CalendarClock className="size-12 mx-auto text-neutral-300 mb-3" />
+          <h3 className="font-semibold">No scheduled posts yet</h3>
+          <p className="text-sm text-neutral-500 mt-1">Publish a video and choose "Optimal times" or "Pick time" to schedule it.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScheduledPostCard({ p, statusColor, onCancel }: { p: any; statusColor: string; onCancel?: () => void }) {
+  const statusLabels: Record<string, string> = {
+    scheduled: 'Scheduled',
+    uploading: 'Publishing…',
+    pending: 'Queued',
+    published: 'Published',
+    failed: 'Failed',
+  }
+  return (
+    <div className="bg-white dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 flex items-center gap-3">
+      {p.video?.thumbnailUrl ? (
+        <img src={p.video.thumbnailUrl} alt="" className="size-12 rounded object-cover" />
+      ) : (
+        <div className="size-12 rounded bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-neutral-300">
+          <Film className="size-4" />
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium truncate">{p.title || p.video?.aiTitle || p.video?.filename}</p>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusColor}`}>{statusLabels[p.status] || p.status}</span>
+        </div>
+        <p className="text-xs text-neutral-500 mt-0.5">
+          <span className="capitalize">{p.platform}</span> · @{p.account?.handle}
+          {p.scheduledAt && p.status === 'scheduled' && (
+            <> · 📅 {new Date(p.scheduledAt).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</>
+          )}
+          {p.publishedAt && p.status === 'published' && (
+            <> · ✅ {new Date(p.publishedAt).toLocaleString(undefined, { hour: 'numeric', minute: '2-digit' })}</>
+          )}
+          {p.status === 'published' && p.platformUrl && (
+            <> · <a href={p.platformUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View</a></>
+          )}
+          {p.status === 'failed' && p.errorMessage && (
+            <> · <span className="text-red-500">{p.errorMessage.slice(0, 80)}</span></>
+          )}
+        </p>
+      </div>
+      {p.status === 'scheduled' && onCancel && (
+        <button onClick={onCancel} className="text-xs text-red-600 hover:underline">Cancel</button>
+      )}
     </div>
   )
 }

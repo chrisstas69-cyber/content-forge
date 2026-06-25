@@ -13,8 +13,10 @@ model Video {
   id             String   @id @default(cuid())
   filename       String
   originalPath   String
-  processedPath  String?
+  processedPath  String?  // primary processed file (16:9 horizontal by default)
+  processedFormats String? // JSON: { "16:9": "/path", "9:16": "/path", "1:1": "/path" }
   thumbnailPath  String?
+  thumbnailFormats String? // JSON: { "16:9": "/path", "9:16": "/path", "1:1": "/path" }
   sizeBytes      Int
   durationSec    Float?
   width          Int?
@@ -82,13 +84,14 @@ model Post {
   accountId    String
   account      SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
   platform     String
-  status       String   @default("pending") // pending | uploading | published | failed
+  status       String   @default("pending") // pending | uploading | published | failed | scheduled
   platformPostId String?
   platformUrl  String?
   title        String?
   description  String?
   hashtags     String?
   errorMessage String?
+  scheduledAt  DateTime? // When to publish (null = publish immediately)
   publishedAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

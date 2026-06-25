@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { probeVideo, extractThumbnail, extractAudio, processVideo, SrtCue, detectSilence } from '@/lib/ffmpeg'
+import { probeVideo, extractThumbnail, extractAudio, processVideo, SrtCue, detectSilence, convertToAspectRatio, generateFormatThumbnail, AspectRatio } from '@/lib/ffmpeg'
 import { transcribeAudio, analyzeVideoContent } from '@/lib/ai'
 import { deleteFile } from '@/lib/storage'
 import path from 'path'
@@ -154,17 +154,55 @@ export async function processVideoPipeline(videoId: string, settings: EditSettin
       updateVideoProgress(videoId, total, 'Rendering video')
     })
 
-    // STEP 5: Thumbnail
-    await updateVideoProgress(videoId, 92, 'Generating thumbnail')
+    // STEP 5: Thumbnail (16:9 default — for backward compat)
+    await updateVideoProgress(videoId, 90, 'Generating thumbnail')
     const thumbName = path.basename(outputPath, '.mp4') + '.jpg'
     const thumbPath = path.join(path.dirname(video.originalPath), '..', 'thumbnails', thumbName)
     await extractThumbnail(outputPath, thumbPath).catch(() => {})
 
+    // STEP 6: Generate multi-format versions (9:16 vertical, 1:1 square, plus keep 16:9)
+    // The primary processedPath is whatever the source aspect produced (often 16:9).
+    // We always generate 9:16 and 1:1 versions; if the source isn't 16:9, we also generate 16:9.
+    const processedFormats: Record<string, string> = {}
+    const thumbnailFormats: Record<string, string> = {}
+    const baseName = path.basename(outputPath, '.mp4')
+
+    // Determine which formats to generate based on source aspect ratio
+    const srcAspect = meta.width && meta.height ? meta.width / meta.height : 16/9
+    const targetRatios: AspectRatio[] = ['16:9', '9:16', '1:1']
+    // Skip generating a redundant version if source aspect already matches one of these
+    // (we'll still generate all 3 for consistency — useful when publishing to multiple platforms)
+
+    for (let i = 0; i < targetRatios.length; i++) {
+      const ratio = targetRatios[i]
+      const pct = 90 + Math.floor((i / targetRatios.length) * 8)
+      await updateVideoProgress(videoId, pct, `Generating ${ratio} version`)
+      const fmtOutName = `${baseName}_${ratio.replace(':', 'x')}.mp4`
+      const fmtOutPath = path.join(path.dirname(video.originalPath), '..', 'processed', fmtOutName)
+      try {
+        await convertToAspectRatio(outputPath, fmtOutPath, ratio)
+        processedFormats[ratio] = fmtOutPath
+        // Per-format thumbnail
+        const fmtThumbName = `${baseName}_${ratio.replace(':', 'x')}.jpg`
+        const fmtThumbPath = path.join(path.dirname(video.originalPath), '..', 'thumbnails', fmtThumbName)
+        await generateFormatThumbnail(fmtOutPath, fmtThumbPath, ratio).catch(() => {})
+        thumbnailFormats[ratio] = fmtThumbPath
+      } catch (err) {
+        console.error(`Failed to generate ${ratio} version:`, err)
+      }
+    }
+
+    // Use the source aspect as the "primary" processedPath if available, otherwise 16:9
+    const primaryRatio: AspectRatio = srcAspect > 1.2 ? '16:9' : srcAspect < 0.8 ? '9:16' : '1:1'
+    const primaryPath = processedFormats[primaryRatio] || outputPath
+
     await db.video.update({
       where: { id: videoId },
       data: {
-        processedPath: outputPath,
-        thumbnailPath: thumbPath,
+        processedPath: primaryPath,
+        processedFormats: JSON.stringify(processedFormats),
+        thumbnailPath: thumbnailFormats[primaryRatio] || thumbPath,
+        thumbnailFormats: JSON.stringify(thumbnailFormats),
         editSettings: JSON.stringify(settings),
       },
     })

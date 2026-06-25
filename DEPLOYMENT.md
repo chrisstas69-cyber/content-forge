@@ -39,9 +39,11 @@ Wait 2–3 minutes for the build to complete. You'll get a URL like `dog-content
 
 ---
 
-## Step 3: Set the Encryption Key on Vercel
+## Step 3: Set Environment Variables on Vercel
 
-This is the ONE environment variable you must set on Vercel — it encrypts all your API keys at rest in the database.
+You need TWO environment variables on Vercel:
+
+### 1. `ENCRYPTION_KEY` — encrypts your API keys at rest
 
 1. Open your terminal and generate a random 32-byte key:
    ```bash
@@ -56,9 +58,23 @@ This is the ONE environment variable you must set on Vercel — it encrypts all 
    - **Value**: (paste the key you generated)
    - **Environment**: select all (Production, Preview, Development)
 
-4. Click **Save**
+### 2. `CRON_SECRET` — protects the scheduled-publishing cron endpoint
 
-5. Go to **Deployments** → click the **⋯** next to your latest deployment → **Redeploy**
+1. Generate another random string:
+   ```bash
+   openssl rand -hex 16
+   ```
+
+2. Add another env var in Vercel:
+   - **Key**: `CRON_SECRET`
+   - **Value**: (paste the key)
+   - **Environment**: Production only
+
+3. Click **Save** on both
+
+4. Go to **Deployments** → click the **⋯** next to your latest deployment → **Redeploy**
+
+The `vercel.json` file in the project root is already configured to hit `/api/cron/publish-scheduled` every minute, which checks for due scheduled posts and publishes them automatically.
 
 ---
 

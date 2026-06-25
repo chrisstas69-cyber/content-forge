@@ -1,9 +1,9 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { Film, Loader2, TrendingUp, CheckCircle2, XCircle, Clock, Share2 } from 'lucide-react'
+import { Film, Loader2, TrendingUp, CheckCircle2, XCircle, Clock, Share2, CalendarClock, Layers } from 'lucide-react'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled'
 
 export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const { data: stats, isLoading } = useQuery({
@@ -21,9 +21,9 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
     { label: 'Total Videos', value: s.total || 0, icon: Film, color: 'bg-neutral-500' },
     { label: 'Processing', value: s.processing || 0, icon: Clock, color: 'bg-blue-500' },
     { label: 'Ready', value: s.ready || 0, icon: CheckCircle2, color: 'bg-emerald-500' },
+    { label: 'Scheduled', value: s.scheduled || 0, icon: CalendarClock, color: 'bg-orange-500' },
     { label: 'Published', value: s.published || 0, icon: Share2, color: 'bg-purple-500' },
-    { label: 'Failed', value: s.failed || 0, icon: XCircle, color: 'bg-red-500' },
-    { label: 'Avg Viral Score', value: s.avgViralScore || 0, icon: TrendingUp, color: 'bg-orange-500' },
+    { label: 'Avg Viral Score', value: s.avgViralScore || 0, icon: TrendingUp, color: 'bg-amber-500' },
   ]
 
   return (
@@ -62,6 +62,10 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
             </button>
             <button onClick={() => onNavigate('social')} className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-800">
               <span>Connect social accounts</span>
+              <span>→</span>
+            </button>
+            <button onClick={() => onNavigate('scheduled')} className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-800">
+              <span>View scheduled posts</span>
               <span>→</span>
             </button>
             <button onClick={() => onNavigate('apikeys')} className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-sm font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40">
@@ -110,7 +114,8 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
           <li>The system <strong>transcribes</strong> audio with AI and generates burned-in captions.</li>
           <li>FFmpeg applies your <strong>watermark, music, intro/outro</strong>, and edits automatically.</li>
           <li>AI analyzes the content and gives it a <strong>viral score (0–100)</strong>.</li>
-          <li>Review the edited video and <strong>publish to YouTube, TikTok, Instagram, Facebook, X</strong> in one click.</li>
+          <li><strong>3 formats auto-generated</strong> — vertical (9:16), horizontal (16:9), and square (1:1) for every platform.</li>
+          <li>Review, then <strong>publish now</strong> or <strong>schedule at optimal times</strong> — one click to all platforms.</li>
         </ol>
       </div>
     </div>

@@ -74,6 +74,7 @@ function serializeVideo(v: any) {
     aiHashtags: v.aiHashtags ? JSON.parse(v.aiHashtags) : [],
     transcription: v.transcription,
     editSettings: v.editSettings ? JSON.parse(v.editSettings) : null,
+    formats: v.processedFormats ? Object.keys(JSON.parse(v.processedFormats)) : [],
     thumbnailUrl: v.thumbnailPath ? `/api/videos/${v.id}/thumbnail` : null,
     processedUrl: v.processedPath ? `/api/videos/${v.id}/download` : null,
     createdAt: v.createdAt,

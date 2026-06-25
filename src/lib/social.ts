@@ -520,3 +520,28 @@ export const platforms: Record<string, SocialPlatform> = {
   facebook: facebookPlatform,
   x: xPlatform,
 }
+
+// Platform → preferred aspect ratio
+// Used by the publishing logic to pick the right format from processedFormats
+export const PLATFORM_PREFERRED_FORMAT: Record<string, '16:9' | '9:16' | '1:1'> = {
+  youtube: '16:9',     // horizontal for main YouTube (Shorts use 9:16 but we publish as regular video)
+  tiktok: '9:16',      // vertical
+  instagram: '9:16',   // Reels format
+  facebook: '16:9',    // horizontal
+  x: '16:9',           // horizontal
+}
+
+export function pickFormatForPlatform(
+  platform: string,
+  processedFormats: Record<string, string> | null,
+  fallbackPath: string,
+): string {
+  if (!processedFormats) return fallbackPath
+  const preferred = PLATFORM_PREFERRED_FORMAT[platform]
+  if (preferred && processedFormats[preferred]) return processedFormats[preferred]
+  // Fallbacks in priority order
+  for (const ratio of ['16:9', '9:16', '1:1']) {
+    if (processedFormats[ratio]) return processedFormats[ratio]
+  }
+  return fallbackPath
+}

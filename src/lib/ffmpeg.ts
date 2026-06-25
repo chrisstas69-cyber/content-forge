@@ -285,3 +285,67 @@ export async function detectSilence(inputPath: string, threshold = -30, minDurat
   }
   return starts.map((s, i) => ({ start: s, end: ends[i] || s }))
 }
+
+// ---- Multi-format conversion ----
+// Generates a crop+scale of the source to the target aspect ratio.
+// Strategy: scale to fill, then center-crop the overflow. Adds padding only if source aspect
+// can't be cleanly cropped (rare).
+export type AspectRatio = '16:9' | '9:16' | '1:1'
+
+export function aspectToDims(ratio: AspectRatio): { w: number; h: number } {
+  switch (ratio) {
+    case '16:9': return { w: 1920, h: 1080 }
+    case '9:16': return { w: 1080, h: 1920 }
+    case '1:1':  return { w: 1080, h: 1080 }
+  }
+}
+
+export async function convertToAspectRatio(
+  inputPath: string,
+  outputPath: string,
+  ratio: AspectRatio,
+  onProgress?: (pct: number) => void,
+): Promise<void> {
+  const { w, h } = aspectToDims(ratio)
+  // scale + crop filter: scale to cover target dimensions, then crop center
+  // 'scale=w:h:force_original_aspect_ratio=increase,crop=w:h'
+  const vf = `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}`
+  await new Promise<void>((resolve, reject) => {
+    const proc = execFile('ffmpeg', [
+      '-y', '-i', inputPath,
+      '-vf', vf,
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '23',
+      '-c:a', 'aac', '-b:a', '128k',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      outputPath,
+    ], { maxBuffer: 1024 * 1024 * 50 }, (err, stdout, stderr) => {
+      if (err) reject(new Error(stderr || err.message))
+      else resolve()
+    })
+    if (onProgress && proc.stderr) {
+      proc.stderr.on('data', () => {
+        // ffmpeg progress is in stderr; without total duration we can't compute pct here
+        // Caller can wrap this if needed
+      })
+    }
+  })
+}
+
+export async function generateFormatThumbnail(inputPath: string, outPath: string, ratio: AspectRatio): Promise<void> {
+  const { w, h } = aspectToDims(ratio)
+  const vf = `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}`
+  await new Promise<void>((resolve, reject) => {
+    execFile('ffmpeg', [
+      '-y', '-i', inputPath,
+      '-ss', '00:00:01',
+      '-frames:v', '1',
+      '-vf', vf,
+      '-q:v', '3',
+      outPath,
+    ], (err) => {
+      if (err) reject(err)
+      else resolve()
+    })
+  })
+}
