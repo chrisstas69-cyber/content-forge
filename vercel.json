@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/publish-scheduled",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/trends/refresh",
@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/analytics/refresh",
-      "schedule": "0 * * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }
