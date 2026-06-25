@@ -11,10 +11,11 @@ import { Analytics } from '@/components/dashboard/analytics'
 import { Ideas, Insights } from '@/components/dashboard/ideas-insights'
 import { Generate } from '@/components/dashboard/generate'
 import { Calendar } from '@/components/dashboard/calendar'
+import { BrandKit } from '@/components/dashboard/brandkit'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar' | 'brandkit'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -78,6 +79,7 @@ export default function Home() {
         {tab === 'insights' && <Insights />}
         {tab === 'generate' && <Generate />}
         {tab === 'calendar' && <Calendar />}
+        {tab === 'brandkit' && <BrandKit />}
         {tab === 'settings' && <Settings />}
         {tab === 'assets' && <Assets />}
         {tab === 'apikeys' && <ApiKeys />}
@@ -89,7 +91,7 @@ export default function Home() {
   )
 }
 
-import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette } from 'lucide-react'
 
 function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const items: { id: Tab; label: string; icon: any }[] = [
@@ -104,6 +106,7 @@ function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     { id: 'trends', label: 'Trends', icon: TrendingUp },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'insights', label: 'Insights', icon: Target },
+    { id: 'brandkit', label: 'Brand Kit', icon: Palette },
     { id: 'apikeys', label: 'API Keys', icon: KeyRound },
     { id: 'assets', label: 'Assets', icon: ImageIcon },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
@@ -196,7 +199,8 @@ function Library() {
 
 function VideoCard({ v }: { v: any }) {
   const [open, setOpen] = useState(false)
-  const [publishing, setPublishing] = useState(false)
+  const [translateOpen, setTranslateOpen] = useState(false)
+  const [repurposing, setRepurposing] = useState(false)
   const queryClient = useQueryClient()
   const statuses: Record<string, string> = {
     pending: 'bg-neutral-100 text-neutral-700',
@@ -213,6 +217,25 @@ function VideoCard({ v }: { v: any }) {
     v.viralScore >= 50 ? 'bg-amber-500 text-white' :
     'bg-red-500 text-white'
 
+  async function repurpose() {
+    setRepurposing(true)
+    try {
+      const res = await fetch(`/api/videos/${v.id}/repurpose`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clipCount: 5 }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      toast.success(data.message || 'Repurposing started')
+      queryClient.invalidateQueries({ queryKey: ['videos'] })
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setRepurposing(false)
+    }
+  }
+
   return (
     <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
       <div className="aspect-video bg-neutral-100 dark:bg-neutral-800 relative">
@@ -226,9 +249,16 @@ function VideoCard({ v }: { v: any }) {
             {v.viralScore}
           </div>
         )}
-        <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs font-medium ${statuses[v.status] || 'bg-neutral-100'}`}>
-          {v.status}
-        </span>
+        <div className="absolute top-2 left-2 flex gap-1">
+          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statuses[v.status] || 'bg-neutral-100'}`}>
+            {v.status}
+          </span>
+          {v.isClip && (
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+              Clip
+            </span>
+          )}
+        </div>
         {(v.status === 'editing' || v.status === 'transcribing' || v.status === 'scoring') && (
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-neutral-200">
             <div className="h-full bg-blue-500 transition-all" style={{ width: `${v.progress}%` }} />
@@ -237,7 +267,10 @@ function VideoCard({ v }: { v: any }) {
       </div>
       <div className="p-3">
         <h3 className="font-medium text-sm truncate">{v.aiTitle || v.filename}</h3>
-        <p className="text-xs text-neutral-500 mt-0.5">{v.durationSec ? `${Math.floor(v.durationSec)}s` : '—'} · {(v.sizeBytes / 1024 / 1024).toFixed(1)} MB</p>
+        <p className="text-xs text-neutral-500 mt-0.5">
+          {v.durationSec ? `${Math.floor(v.durationSec)}s` : '—'} · {(v.sizeBytes / 1024 / 1024).toFixed(1)} MB
+          {v.isClip && v.clipStart != null && ` · from ${Math.floor(v.clipStart)}s`}
+        </p>
         {v.aiHashtags?.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
             {v.aiHashtags.slice(0, 4).map((h: string) => (
@@ -245,10 +278,20 @@ function VideoCard({ v }: { v: any }) {
             ))}
           </div>
         )}
-        <div className="flex gap-2 mt-3">
+        <div className="flex flex-wrap gap-2 mt-3">
           {v.status === 'ready' && (
             <button onClick={() => setOpen(true)} className="flex-1 px-3 py-1.5 text-xs font-medium rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900">
               Publish
+            </button>
+          )}
+          {v.status === 'ready' && !v.isClip && v.durationSec > 90 && (
+            <button onClick={repurpose} disabled={repurposing} className="px-3 py-1.5 text-xs font-medium rounded-md border border-purple-300 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 disabled:opacity-50">
+              {repurposing ? '…' : 'Repurpose'}
+            </button>
+          )}
+          {v.status === 'ready' && (
+            <button onClick={() => setTranslateOpen(true)} className="px-3 py-1.5 text-xs font-medium rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+              Translate
             </button>
           )}
           {v.status === 'failed' && (
@@ -270,6 +313,7 @@ function VideoCard({ v }: { v: any }) {
         </div>
       </div>
       {open && <PublishDialog v={v} onClose={() => setOpen(false)} onPublished={() => queryClient.invalidateQueries({ queryKey: ['videos'] })} />}
+      {translateOpen && <TranslateDialog v={v} onClose={() => setTranslateOpen(false)} />}
     </div>
   )
 }
@@ -431,6 +475,102 @@ function PublishDialog({ v, onClose, onPublished }: { v: any; onClose: () => voi
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function TranslateDialog({ v, onClose }: { v: any; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const { data, isLoading } = useQuery({
+    queryKey: ['translate', v.id],
+    queryFn: async () => (await fetch(`/api/videos/${v.id}/translate`)).json(),
+  })
+  const [selected, setSelected] = useState<string[]>([])
+  const [translating, setTranslating] = useState(false)
+
+  const languages: { code: string; name: string }[] = data?.supportedLanguages || []
+  const translations: Record<string, string> = data?.translations || {}
+
+  async function translate() {
+    setTranslating(true)
+    try {
+      const res = await fetch(`/api/videos/${v.id}/translate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ languages: selected }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      toast.success(`Translated to ${data.translated} language(s)`)
+      queryClient.invalidateQueries({ queryKey: ['translate', v.id] })
+      setSelected([])
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setTranslating(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-neutral-900 rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-bold mb-1">Translate Caption</h3>
+        <p className="text-xs text-neutral-500 mb-4">Translate "{v.aiTitle || v.filename}" caption to reach international audiences.</p>
+
+        {isLoading ? (
+          <p className="text-sm text-neutral-500">Loading…</p>
+        ) : (
+          <>
+            {Object.keys(translations).length > 0 && (
+              <div className="mb-4 space-y-2">
+                <p className="text-xs font-semibold text-neutral-500 uppercase">Existing translations</p>
+                {Object.entries(translations).map(([lang, text]) => {
+                  const langName = languages.find(l => l.code === lang)?.name || lang
+                  return (
+                    <div key={lang} className="p-2 rounded-md bg-neutral-50 dark:bg-neutral-950">
+                      <p className="text-xs font-semibold">{langName}</p>
+                      <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">{(text as string).slice(0, 150)}{(text as string).length > 150 ? '…' : ''}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-2 block">Select languages to translate</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {languages.map(lang => {
+                  const checked = selected.includes(lang.code)
+                  const has = translations[lang.code]
+                  return (
+                    <button
+                      key={lang.code}
+                      onClick={() => setSelected(prev => checked ? prev.filter(l => l !== lang.code) : [...prev, lang.code])}
+                      className={`px-3 py-2 rounded-md text-xs font-medium border text-left ${checked ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30' : 'border-neutral-200 dark:border-neutral-800'}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>{lang.name}</span>
+                        {has && <span className="text-[9px] text-emerald-600">✓</span>}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <button onClick={onClose} className="flex-1 px-4 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 text-sm font-medium">Close</button>
+              <button
+                onClick={translate}
+                disabled={translating || selected.length === 0}
+                className="flex-1 px-4 py-2 rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 text-sm font-medium disabled:opacity-50"
+              >
+                {translating ? 'Translating…' : `Translate to ${selected.length}`}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

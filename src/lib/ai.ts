@@ -222,6 +222,46 @@ export async function generateTTS(text: string, voice: string = 'tongtong', spee
   return Buffer.from(new Uint8Array(arrayBuffer))
 }
 
+// ---- Subtitle translation ----
+export const SUPPORTED_LANGUAGES = [
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'it', name: 'Italian' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'zh', name: 'Chinese (Simplified)' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'hi', name: 'Hindi' },
+]
+
+export async function translateCaptions(text: string, targetLangs: string[]): Promise<Record<string, string>> {
+  const zai = await getZai()
+  const results: Record<string, string> = {}
+
+  for (const lang of targetLangs) {
+    const langName = SUPPORTED_LANGUAGES.find(l => l.code === lang)?.name || lang
+    try {
+      const result = await zai.chat.completions.create({
+        messages: [
+          { role: 'system', content: `You are a professional translator. Translate the user's text to ${langName}. Preserve the meaning, tone, and any emojis. Return ONLY the translation, no commentary.` },
+          { role: 'user', content: text },
+        ],
+        temperature: 0.3,
+      })
+      const translated = result.choices?.[0]?.message?.content || ''
+      if (translated) results[lang] = translated.trim()
+    } catch (err) {
+      console.error(`Translation to ${lang} failed:`, err)
+    }
+  }
+
+  return results
+}
+
 // ---- Per-platform caption variants ----
 export interface PlatformCaptions {
   youtube: { title: string; description: string; hashtags: string[] }

@@ -440,6 +440,129 @@ export const agentTools: AgentTool[] = [
       }
     },
   },
+  // ---- NEW: Repurposing tools ----
+  {
+    name: 'repurpose_video',
+    description: 'Cut a long video into multiple short clips (30-90 seconds) for TikTok/Reels/Shorts. AI identifies the most engaging moments. Use when the user has a long video and wants short clips.',
+    parameters: {
+      type: 'object',
+      properties: {
+        videoId: { type: 'string', description: 'The ID of the long video to repurpose' },
+        clipCount: { type: 'number', description: 'Number of clips to extract (default 5, max 10)' },
+      },
+      required: ['videoId'],
+    },
+    handler: async (args) => {
+      const v = await db.video.findUnique({ where: { id: args.videoId } })
+      if (!v) return { error: 'Video not found' }
+      if (!v.processedPath) return { error: 'Video not processed yet' }
+      if (!v.transcription) return { error: 'Video has no transcription — process it first' }
+      if (v.durationSec && v.durationSec < 90) {
+        return { error: `Video is only ${Math.floor(v.durationSec)}s long — repurposing works best on videos over 90s` }
+      }
+      // Trigger in background — don't await
+      const { repurposeVideo } = await import('@/lib/repurpose')
+      repurposeVideo(args.videoId, { clipCount: Math.min(args.clipCount || 5, 10), autoProcess: true })
+        .catch((err: any) => console.error('Repurpose failed:', err))
+      return {
+        ok: true,
+        message: `Repurposing started — extracting up to ${args.clipCount || 5} clips. They will appear in the Library as they are processed.`,
+      }
+    },
+  },
+  {
+    name: 'list_clips',
+    description: 'List clips that were extracted from a parent video via repurposing.',
+    parameters: {
+      type: 'object',
+      properties: {
+        videoId: { type: 'string', description: 'The parent video ID' },
+      },
+      required: ['videoId'],
+    },
+    handler: async (args) => {
+      const clips = await db.video.findMany({
+        where: { parentId: args.videoId },
+        orderBy: { clipStart: 'asc' },
+      })
+      return {
+        count: clips.length,
+        clips: clips.map(c => ({
+          id: c.id,
+          title: c.aiTitle || c.filename,
+          status: c.status,
+          viralScore: c.viralScore,
+          start: c.clipStart,
+          end: c.clipEnd,
+          duration: c.clipEnd && c.clipStart ? c.clipEnd - c.clipStart : null,
+        })),
+      }
+    },
+  },
+  // ---- NEW: Brand Kit tools ----
+  {
+    name: 'get_brand_kit',
+    description: 'Get the user\'s brand kit — logo, colors, fonts, watermark settings. Use to understand their visual identity.',
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      const { getBrandKit } = await import('@/lib/brandkit')
+      const kit = await getBrandKit()
+      return kit || { message: 'No brand kit configured yet' }
+    },
+  },
+  {
+    name: 'update_brand_kit',
+    description: 'Update the user\'s brand kit settings (colors, fonts, watermark position). Logo must be uploaded via the UI.',
+    parameters: {
+      type: 'object',
+      properties: {
+        brandName: { type: 'string' },
+        primaryColor: { type: 'string', description: 'Hex color like #FF6B35' },
+        secondaryColor: { type: 'string' },
+        accentColor: { type: 'string' },
+        fontFamily: { type: 'string' },
+        watermarkPosition: { type: 'string', description: 'top-left, top-right, bottom-left, bottom-right, center' },
+      },
+    },
+    handler: async (args) => {
+      const { saveBrandKit } = await import('@/lib/brandkit')
+      const kit = await saveBrandKit(args)
+      return { ok: true, brandKit: kit }
+    },
+  },
+  // ---- NEW: Translation tool ----
+  {
+    name: 'translate_captions',
+    description: 'Translate a video\'s caption to multiple languages. Use when the user wants to reach international audiences.',
+    parameters: {
+      type: 'object',
+      properties: {
+        videoId: { type: 'string' },
+        languages: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Language codes: es, fr, de, it, pt, nl, ru, ja, ko, zh, ar, hi',
+        },
+      },
+      required: ['videoId', 'languages'],
+    },
+    handler: async (args) => {
+      const v = await db.video.findUnique({ where: { id: args.videoId } })
+      if (!v) return { error: 'Video not found' }
+      const { translateCaptions } = await import('@/lib/ai')
+      const text = [v.aiCaption, v.aiDescription, v.aiTitle].filter(Boolean).join('\n\n')
+      if (!text) return { error: 'No caption to translate' }
+      const translations = await translateCaptions(text, args.languages)
+      const existing = v.translations ? JSON.parse(v.translations) : {}
+      const merged = { ...existing, ...translations }
+      await db.video.update({ where: { id: args.videoId }, data: { translations: JSON.stringify(merged) } })
+      return {
+        ok: true,
+        translated: Object.keys(translations).length,
+        languages: Object.keys(translations),
+      }
+    },
+  },
 ]
 
 export function getToolByName(name: string): AgentTool | undefined {

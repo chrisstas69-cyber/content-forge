@@ -77,6 +77,11 @@ function serializeVideo(v: any) {
     formats: v.processedFormats ? Object.keys(JSON.parse(v.processedFormats)) : [],
     thumbnailUrl: v.thumbnailPath ? `/api/videos/${v.id}/thumbnail` : null,
     processedUrl: v.processedPath ? `/api/videos/${v.id}/download` : null,
+    isClip: v.isClip || false,
+    parentId: v.parentId || null,
+    clipStart: v.clipStart ?? null,
+    clipEnd: v.clipEnd ?? null,
+    translations: v.translations ? Object.keys(JSON.parse(v.translations)) : [],
     createdAt: v.createdAt,
     updatedAt: v.updatedAt,
   }

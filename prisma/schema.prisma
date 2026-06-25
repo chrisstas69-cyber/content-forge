@@ -37,6 +37,17 @@ model Video {
   voiceoverPath  String?  // path to generated audio
   voiceoverEnabled Boolean @default(false)
 
+  // Subtitle translation
+  translations  String?  // JSON: { "es": "translated text", "fr": "...", ... }
+
+  // Repurposing — clips reference their parent video
+  parentId      String?  // if this video is a clip, the parent video ID
+  parent        Video?   @relation("VideoClips", fields: [parentId], references: [id], onDelete: Cascade)
+  clips         Video[]  @relation("VideoClips")
+  isClip        Boolean  @default(false)
+  clipStart     Float?   // start time in parent (seconds)
+  clipEnd       Float?   // end time in parent (seconds)
+
   // Status: pending | transcribing | editing | scoring | ready | publishing | published | failed
   status         String   @default("pending")
   progress       Int      @default(0)
@@ -230,4 +241,19 @@ model Insight {
   createdAt  DateTime @default(now())
   @@index([niche, type])
   @@index([freshness])
+}
+
+/// Brand Kit — logo, colors, fonts stored once, auto-applied to every video
+model BrandKit {
+  id           String   @id @default("default")
+  brandName    String?
+  logoPath     String?
+  primaryColor String?  // hex like #FF6B35
+  secondaryColor String?
+  accentColor  String?
+  fontFamily   String?
+  watermarkPosition String? // top-left | top-right | bottom-left | bottom-right | center
+  watermarkOpacity Float?
+  watermarkScale Float?
+  updatedAt    DateTime @updatedAt
 }
