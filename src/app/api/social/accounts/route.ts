@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { platforms } from '@/lib/social'
 
 export const runtime = 'nodejs'
 
 export async function GET() {
   const accounts = await db.socialAccount.findMany({ orderBy: { platform: 'asc' }, include: { posts: true } })
+
+  // Also include "configured" status for each platform
+  const platformStatus: Record<string, boolean> = {}
+  for (const key of Object.keys(platforms)) {
+    platformStatus[key] = await platforms[key].isConfigured()
+  }
+
   return NextResponse.json({
     accounts: accounts.map(a => ({
       id: a.id,
@@ -15,6 +23,7 @@ export async function GET() {
       tokenExpiry: a.tokenExpiry,
       postCount: a.posts.length,
     })),
+    platformStatus,
   })
 }
 

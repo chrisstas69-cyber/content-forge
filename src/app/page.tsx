@@ -4,10 +4,11 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Upload } from '@/components/dashboard/upload'
 import { Dashboard } from '@/components/dashboard'
+import { ApiKeys } from '@/components/dashboard/api-keys'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -63,9 +64,10 @@ export default function Home() {
         {tab === 'dashboard' && <Dashboard onNavigate={setTab} />}
         {tab === 'upload' && <Upload />}
         {tab === 'library' && <Library />}
-        {tab === 'social' && <SocialAccounts />}
+        {tab === 'social' && <SocialAccounts onNavigate={setTab} />}
         {tab === 'settings' && <Settings />}
         {tab === 'assets' && <Assets />}
+        {tab === 'apikeys' && <ApiKeys />}
       </main>
       <Footer />
       <Toaster richColors position="bottom-right" />
@@ -73,14 +75,15 @@ export default function Home() {
   )
 }
 
-import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound } from 'lucide-react'
 
 function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const items: { id: Tab; label: string; icon: any }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'upload', label: 'Upload', icon: UploadCloud },
     { id: 'library', label: 'Library', icon: Film },
-    { id: 'social', label: 'Social Accounts', icon: Share2 },
+    { id: 'social', label: 'Social', icon: Share2 },
+    { id: 'apikeys', label: 'API Keys', icon: KeyRound },
     { id: 'assets', label: 'Assets', icon: ImageIcon },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
   ]
@@ -351,71 +354,77 @@ function PublishDialog({ v, onClose, onPublished }: { v: any; onClose: () => voi
 }
 
 // === Social Accounts ===
-function SocialAccounts() {
+function SocialAccounts({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => (await fetch('/api/social/accounts')).json(),
   })
   const accounts: any[] = data?.accounts || []
+  const platformStatus: Record<string, boolean> = data?.platformStatus || {}
   const platforms = ['youtube', 'tiktok', 'instagram', 'facebook', 'x']
 
   return (
     <div>
       <h2 className="text-xl font-bold mb-1">Social Media Accounts</h2>
-      <p className="text-sm text-neutral-500 mb-4">Connect your accounts to enable automatic publishing. Each platform requires its own API credentials in your <code>.env</code> file.</p>
+      <p className="text-sm text-neutral-500 mb-4">Connect your accounts to enable one-click publishing. You'll need to add API keys first.</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {platforms.map(p => {
           const acct = accounts.find(a => a.platform === p && a.connected)
+          const configured = platformStatus[p]
           return (
-            <div key={p} className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 flex items-center justify-between">
-              <div>
-                <p className="font-medium capitalize">{p}</p>
+            <div key={p} className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium capitalize">{p}</p>
+                    {configured ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">API Ready</span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Needs Keys</span>
+                    )}
+                  </div>
+                  {acct ? (
+                    <p className="text-xs text-neutral-500 mt-0.5">@{acct.handle} · {acct.displayName}</p>
+                  ) : (
+                    <p className="text-xs text-neutral-500 mt-0.5">Not connected</p>
+                  )}
+                </div>
                 {acct ? (
-                  <p className="text-xs text-neutral-500 mt-0.5">@{acct.handle} · {acct.displayName}</p>
+                  <button
+                    onClick={async () => {
+                      await fetch('/api/social/accounts', { method: 'DELETE', body: JSON.stringify({ id: acct.id }), headers: { 'Content-Type': 'application/json' } })
+                      refetch()
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-red-200 text-red-600 hover:bg-red-50"
+                  >
+                    Disconnect
+                  </button>
+                ) : configured ? (
+                  <a href={`/api/social/connect/${p}`} className="px-3 py-1.5 text-xs font-medium rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900">
+                    Connect
+                  </a>
                 ) : (
-                  <p className="text-xs text-neutral-500 mt-0.5">Not connected</p>
+                  <button onClick={() => onNavigate('apikeys')} className="px-3 py-1.5 text-xs font-medium rounded-md border border-amber-300 text-amber-700 dark:text-amber-300">
+                    Add Keys
+                  </button>
                 )}
               </div>
-              {acct ? (
-                <button
-                  onClick={async () => {
-                    await fetch('/api/social/accounts', { method: 'DELETE', body: JSON.stringify({ id: acct.id }), headers: { 'Content-Type': 'application/json' } })
-                    refetch()
-                  }}
-                  className="px-3 py-1.5 text-xs font-medium rounded-md border border-red-200 text-red-600 hover:bg-red-50"
-                >
-                  Disconnect
-                </button>
-              ) : (
-                <a href={`/api/social/connect/${p}`} className="px-3 py-1.5 text-xs font-medium rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900">
-                  Connect
-                </a>
-              )}
             </div>
           )
         })}
       </div>
 
-      <div className="mt-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">
-        <h3 className="font-semibold text-amber-800 dark:text-amber-200 text-sm">Required Environment Variables</h3>
-        <pre className="text-xs mt-2 overflow-x-auto text-amber-900 dark:text-amber-100">{`# YouTube / Google
-YOUTUBE_CLIENT_ID=
-YOUTUBE_CLIENT_SECRET=
-
-# TikTok
-TIKTOK_CLIENT_KEY=
-TIKTOK_CLIENT_SECRET=
-
-# Instagram + Facebook (Meta)
-META_APP_ID=
-META_APP_SECRET=
-
-# X (Twitter)
-X_CLIENT_ID=
-X_CLIENT_SECRET=`}</pre>
-        <p className="text-xs mt-3 text-amber-800 dark:text-amber-200">
-          Instagram &amp; Facebook require videos hosted on a public URL (S3, Cloudinary, etc.). For local/self-hosted, configure S3 storage and update the connector in <code>src/lib/social.ts</code>.
+      <div className="mt-6 p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900">
+        <h3 className="font-semibold text-blue-800 dark:text-blue-200 text-sm">How to set up</h3>
+        <ol className="text-sm text-blue-800 dark:text-blue-100 mt-2 space-y-1 list-decimal list-inside">
+          <li>Go to <button onClick={() => onNavigate('apikeys')} className="underline font-medium">API Keys tab</button> and add credentials for each platform you want to publish to.</li>
+          <li>Each platform's developer portal link is shown next to its fields. Create an app there to get the keys.</li>
+          <li>Set the OAuth Redirect URL in each platform's settings to: <code className="text-xs px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 break-all">{typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com'}/api/social/callback/[platform]</code></li>
+          <li>Come back here and click <strong>Connect</strong> — you'll be redirected to the platform's login page.</li>
+        </ol>
+        <p className="text-xs mt-3 text-blue-700 dark:text-blue-300">
+          Note: Instagram &amp; Facebook require videos hosted on a public URL (S3, Cloudinary, etc.) for publishing. YouTube, TikTok, and X support direct file upload.
         </p>
       </div>
     </div>

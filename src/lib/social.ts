@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { promises as fs } from 'fs'
+import { getSecret } from '@/lib/secrets'
 
 export interface PublishPayload {
   videoPath: string
@@ -18,19 +19,33 @@ export interface PublishResult {
 export interface SocialPlatform {
   platform: string
   displayName: string
-  oauthUrl: (redirectUri: string, state: string) => string
+  // Resolved credentials (loaded from DB)
+  isConfigured: () => Promise<boolean>
+  oauthUrl: (redirectUri: string, state: string) => Promise<string>
   exchangeCode: (code: string, redirectUri: string) => Promise<{ accessToken: string; refreshToken?: string; expiresIn?: number; handle?: string; displayName?: string; metadata?: any }>
   refreshIfNeeded: (account: any) => Promise<{ accessToken: string; refreshToken?: string; expiresIn?: number } | null>
   publish: (account: any, payload: PublishPayload) => Promise<PublishResult>
+}
+
+// Helper to throw a clear error if credentials are missing
+function missingCreds(platform: string): Error {
+  return new Error(`${platform} API credentials are not set. Go to Settings → API Keys to add them.`)
 }
 
 // ---- YouTube ----
 export const youtubePlatform: SocialPlatform = {
   platform: 'youtube',
   displayName: 'YouTube',
-  oauthUrl: (redirectUri, state) => {
+  isConfigured: async () => {
+    const id = await getSecret('youtube.client_id')
+    const sec = await getSecret('youtube.client_secret')
+    return !!(id && sec)
+  },
+  oauthUrl: async (redirectUri, state) => {
+    const clientId = await getSecret('youtube.client_id')
+    if (!clientId) throw missingCreds('YouTube')
     const params = new URLSearchParams({
-      client_id: process.env.YOUTUBE_CLIENT_ID || '',
+      client_id: clientId,
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly',
@@ -41,20 +56,22 @@ export const youtubePlatform: SocialPlatform = {
     return `https://accounts.google.com/o/oauth2/auth?${params.toString()}`
   },
   exchangeCode: async (code, redirectUri) => {
+    const clientId = await getSecret('youtube.client_id')
+    const clientSecret = await getSecret('youtube.client_secret')
+    if (!clientId || !clientSecret) throw missingCreds('YouTube')
     const res = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code,
-        client_id: process.env.YOUTUBE_CLIENT_ID || '',
-        client_secret: process.env.YOUTUBE_CLIENT_SECRET || '',
+        client_id: clientId,
+        client_secret: clientSecret,
         redirect_uri: redirectUri,
         grant_type: 'authorization_code',
       }),
     })
     const data = await res.json()
     if (!data.access_token) throw new Error('YouTube OAuth failed: ' + JSON.stringify(data))
-    // Fetch channel info
     const ch = await fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true', {
       headers: { Authorization: `Bearer ${data.access_token}` },
     }).then(r => r.json())
@@ -71,12 +88,15 @@ export const youtubePlatform: SocialPlatform = {
   refreshIfNeeded: async (account) => {
     if (!account.tokenExpiry || account.tokenExpiry > new Date(Date.now() + 5 * 60 * 1000)) return null
     if (!account.refreshToken) return null
+    const clientId = await getSecret('youtube.client_id')
+    const clientSecret = await getSecret('youtube.client_secret')
+    if (!clientId || !clientSecret) return null
     const res = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id: process.env.YOUTUBE_CLIENT_ID || '',
-        client_secret: process.env.YOUTUBE_CLIENT_SECRET || '',
+        client_id: clientId,
+        client_secret: clientSecret,
         refresh_token: account.refreshToken,
         grant_type: 'refresh_token',
       }),
@@ -90,7 +110,6 @@ export const youtubePlatform: SocialPlatform = {
     }
   },
   publish: async (account, payload) => {
-    // Refresh if needed
     const refreshed = await youtubePlatform.refreshIfNeeded(account)
     const accessToken = refreshed?.accessToken || account.accessToken
     if (refreshed) {
@@ -113,7 +132,6 @@ export const youtubePlatform: SocialPlatform = {
       },
       status: { privacyStatus: 'public' },
     }
-    const fileSize = stats.size
     const boundary = '-------' + Math.random().toString(16).slice(2)
     const body = Buffer.concat([
       Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`),
@@ -144,9 +162,16 @@ export const youtubePlatform: SocialPlatform = {
 export const tiktokPlatform: SocialPlatform = {
   platform: 'tiktok',
   displayName: 'TikTok',
-  oauthUrl: (redirectUri, state) => {
+  isConfigured: async () => {
+    const k = await getSecret('tiktok.client_key')
+    const s = await getSecret('tiktok.client_secret')
+    return !!(k && s)
+  },
+  oauthUrl: async (redirectUri, state) => {
+    const clientKey = await getSecret('tiktok.client_key')
+    if (!clientKey) throw missingCreds('TikTok')
     const params = new URLSearchParams({
-      client_key: process.env.TIKTOK_CLIENT_KEY || '',
+      client_key: clientKey,
       scope: 'video.upload,video.publish,user.info.basic',
       response_type: 'code',
       redirect_uri: redirectUri,
@@ -155,12 +180,15 @@ export const tiktokPlatform: SocialPlatform = {
     return `https://www.tiktok.com/v2/auth/authorize/?${params.toString()}`
   },
   exchangeCode: async (code, redirectUri) => {
+    const clientKey = await getSecret('tiktok.client_key')
+    const clientSecret = await getSecret('tiktok.client_secret')
+    if (!clientKey || !clientSecret) throw missingCreds('TikTok')
     const res = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_key: process.env.TIKTOK_CLIENT_KEY || '',
-        client_secret: process.env.TIKTOK_CLIENT_SECRET || '',
+        client_key: clientKey,
+        client_secret: clientSecret,
         code,
         grant_type: 'authorization_code',
         redirect_uri: redirectUri,
@@ -168,7 +196,6 @@ export const tiktokPlatform: SocialPlatform = {
     })
     const data = await res.json()
     if (!data.access_token) throw new Error('TikTok OAuth failed: ' + JSON.stringify(data))
-    // Get user info
     const userRes = await fetch('https://open.tiktokapis.com/v2/user/info/', {
       headers: { Authorization: `Bearer ${data.access_token}` },
     })
@@ -185,12 +212,15 @@ export const tiktokPlatform: SocialPlatform = {
   refreshIfNeeded: async (account) => {
     if (!account.tokenExpiry || account.tokenExpiry > new Date(Date.now() + 5 * 60 * 1000)) return null
     if (!account.refreshToken) return null
+    const clientKey = await getSecret('tiktok.client_key')
+    const clientSecret = await getSecret('tiktok.client_secret')
+    if (!clientKey || !clientSecret) return null
     const res = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_key: process.env.TIKTOK_CLIENT_KEY || '',
-        client_secret: process.env.TIKTOK_CLIENT_SECRET || '',
+        client_key: clientKey,
+        client_secret: clientSecret,
         grant_type: 'refresh_token',
         refresh_token: account.refreshToken,
       }),
@@ -216,9 +246,7 @@ export const tiktokPlatform: SocialPlatform = {
         },
       })
     }
-    const meta = JSON.parse(account.metadata || '{}')
     const fileBuffer = await fs.readFile(payload.videoPath)
-    // Step 1: Initialize upload
     const initRes = await fetch('https://open.tiktokapis.com/v2/post/publish/video/init/', {
       method: 'POST',
       headers: {
@@ -243,7 +271,6 @@ export const tiktokPlatform: SocialPlatform = {
     })
     const initData = await initRes.json()
     if (!initData.data?.upload_url) throw new Error('TikTok init failed: ' + JSON.stringify(initData))
-    // Step 2: Upload
     await fetch(initData.data.upload_url, {
       method: 'PUT',
       headers: {
@@ -263,9 +290,16 @@ export const tiktokPlatform: SocialPlatform = {
 export const instagramPlatform: SocialPlatform = {
   platform: 'instagram',
   displayName: 'Instagram',
-  oauthUrl: (redirectUri, state) => {
+  isConfigured: async () => {
+    const id = await getSecret('meta.app_id')
+    const sec = await getSecret('meta.app_secret')
+    return !!(id && sec)
+  },
+  oauthUrl: async (redirectUri, state) => {
+    const appId = await getSecret('meta.app_id')
+    if (!appId) throw missingCreds('Instagram')
     const params = new URLSearchParams({
-      client_id: process.env.META_APP_ID || '',
+      client_id: appId,
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: 'instagram_content_publish,pages_read_engagement,pages_show_list',
@@ -274,45 +308,44 @@ export const instagramPlatform: SocialPlatform = {
     return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`
   },
   exchangeCode: async (code, redirectUri) => {
+    const appId = await getSecret('meta.app_id')
+    const appSecret = await getSecret('meta.app_secret')
+    if (!appId || !appSecret) throw missingCreds('Instagram')
     const res = await fetch('https://graph.facebook.com/v21.0/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id: process.env.META_APP_ID || '',
-        client_secret: process.env.META_APP_SECRET || '',
+        client_id: appId,
+        client_secret: appSecret,
         redirect_uri: redirectUri,
         code,
       }),
     })
     const data = await res.json()
     if (!data.access_token) throw new Error('Instagram OAuth failed: ' + JSON.stringify(data))
-    // Get user pages + ig account
     const pagesRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?access_token=${data.access_token}`)
     const pagesData = await pagesRes.json()
     const page = pagesData.data?.[0]
-    if (!page) throw new Error('No Instagram business account found')
+    if (!page) throw new Error('No Instagram business account found. Make sure your Facebook Page has an Instagram business account linked.')
     const igRes = await fetch(`https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`)
     const igData = await igRes.json()
     const igId = igData.instagram_business_account?.id
-    if (!igId) throw new Error('No IG business account linked to page')
+    if (!igId) throw new Error('No Instagram business account linked to your Facebook Page')
     const igProfile = await fetch(`https://graph.facebook.com/v21.0/${igId}?fields=username,name&access_token=${page.access_token}`).then(r => r.json())
     return {
       accessToken: page.access_token,
-      refreshToken: data.access_token, // user token
+      refreshToken: data.access_token,
       expiresIn: data.expires_in,
       handle: igProfile.username,
       displayName: igProfile.name || igProfile.username,
       metadata: JSON.stringify({ igUserId: igId, pageId: page.id }),
     }
   },
-  refreshIfNeeded: async (account) => null, // Long-lived tokens handled separately
+  refreshIfNeeded: async () => null,
   publish: async (account, payload) => {
-    const meta = JSON.parse(account.metadata || '{}')
-    // For IG, we need a public URL for the video — this requires either S3 hosting or a temporary public URL
-    // In a real deployment, you'd upload to S3/Cloudinary first and pass the URL here.
-    // For this build, we'll create a container with a local URL (won't work in production without public hosting)
-    // This is a documented limitation — to enable real IG publishing, host videos on S3 and provide public URLs.
-    throw new Error('Instagram publishing requires a public video URL. Configure S3/public storage and update the connector.')
+    // IG requires a publicly accessible video URL. For self-hosted deployments without S3,
+    // we cannot satisfy this. Throw a clear, actionable error.
+    throw new Error('Instagram publishing requires a public video URL. Configure S3/Cloudinary storage and update src/lib/social.ts to upload first.')
   },
 }
 
@@ -320,9 +353,16 @@ export const instagramPlatform: SocialPlatform = {
 export const facebookPlatform: SocialPlatform = {
   platform: 'facebook',
   displayName: 'Facebook',
-  oauthUrl: (redirectUri, state) => {
+  isConfigured: async () => {
+    const id = await getSecret('meta.app_id')
+    const sec = await getSecret('meta.app_secret')
+    return !!(id && sec)
+  },
+  oauthUrl: async (redirectUri, state) => {
+    const appId = await getSecret('meta.app_id')
+    if (!appId) throw missingCreds('Facebook')
     const params = new URLSearchParams({
-      client_id: process.env.META_APP_ID || '',
+      client_id: appId,
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: 'pages_manage_posts,pages_read_engagement,publish_video',
@@ -331,12 +371,15 @@ export const facebookPlatform: SocialPlatform = {
     return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`
   },
   exchangeCode: async (code, redirectUri) => {
+    const appId = await getSecret('meta.app_id')
+    const appSecret = await getSecret('meta.app_secret')
+    if (!appId || !appSecret) throw missingCreds('Facebook')
     const res = await fetch('https://graph.facebook.com/v21.0/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id: process.env.META_APP_ID || '',
-        client_secret: process.env.META_APP_SECRET || '',
+        client_id: appId,
+        client_secret: appSecret,
         redirect_uri: redirectUri,
         code,
       }),
@@ -346,7 +389,7 @@ export const facebookPlatform: SocialPlatform = {
     const pagesRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?access_token=${data.access_token}`)
     const pagesData = await pagesRes.json()
     const page = pagesData.data?.[0]
-    if (!page) throw new Error('No Facebook pages found')
+    if (!page) throw new Error('No Facebook Pages found. Create a Page first.')
     return {
       accessToken: page.access_token,
       refreshToken: data.access_token,
@@ -358,9 +401,7 @@ export const facebookPlatform: SocialPlatform = {
   },
   refreshIfNeeded: async () => null,
   publish: async (account, payload) => {
-    const meta = JSON.parse(account.metadata || '{}')
-    // Facebook requires either URL or chunked upload
-    throw new Error('Facebook publishing requires a public video URL. Configure S3/public storage and update the connector.')
+    throw new Error('Facebook publishing requires a public video URL. Configure S3/Cloudinary storage and update src/lib/social.ts to upload first.')
   },
 }
 
@@ -368,16 +409,36 @@ export const facebookPlatform: SocialPlatform = {
 export const xPlatform: SocialPlatform = {
   platform: 'x',
   displayName: 'X (Twitter)',
-  oauthUrl: (redirectUri, state) => {
-    // X uses OAuth 1.0a + 2.0 PKCE — too complex for inline. Stub URL.
-    return `https://twitter.com/i/oauth2/authorize?client_id=${process.env.X_CLIENT_ID || ''}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=tweet.read%20tweet.write%20users.read%20media.write&state=${state}&code_challenge=${state}&code_challenge_method=plain`
+  isConfigured: async () => {
+    const id = await getSecret('x.client_id')
+    const sec = await getSecret('x.client_secret')
+    return !!(id && sec)
+  },
+  oauthUrl: async (redirectUri, state) => {
+    const clientId = await getSecret('x.client_id')
+    if (!clientId) throw missingCreds('X')
+    // Note: X uses PKCE. We're using state as a placeholder code_challenge for simplicity.
+    // Production should use a proper PKCE flow with code_verifier stored in DB.
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: 'tweet.read tweet.write users.read media.write',
+      state,
+      code_challenge: state,
+      code_challenge_method: 'plain',
+    })
+    return `https://twitter.com/i/oauth2/authorize?${params.toString()}`
   },
   exchangeCode: async (code, redirectUri) => {
+    const clientId = await getSecret('x.client_id')
+    const clientSecret = await getSecret('x.client_secret')
+    if (!clientId || !clientSecret) throw missingCreds('X')
     const res = await fetch('https://api.twitter.com/2/oauth2/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: 'Basic ' + Buffer.from(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`).toString('base64'),
+        Authorization: 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64'),
       },
       body: new URLSearchParams({
         code,
@@ -421,8 +482,6 @@ export const xPlatform: SocialPlatform = {
     }
   },
   publish: async (account, payload) => {
-    // X v2 media upload is two-step and uses OAuth 1.0a for media. Complex.
-    // Posting a text tweet only:
     const refreshed = await xPlatform.refreshIfNeeded(account)
     const accessToken = refreshed?.accessToken || account.accessToken
     if (refreshed) {
@@ -435,7 +494,7 @@ export const xPlatform: SocialPlatform = {
         },
       })
     }
-    // Note: Media upload requires OAuth 1.0a credentials. Without those, we post text only.
+    // Note: X media upload requires OAuth 1.0a credentials. Without those, we post text only.
     const text = `${payload.title}\n\n${payload.hashtags.map(h => `#${h}`).join(' ')}`
     const res = await fetch('https://api.twitter.com/2/tweets', {
       method: 'POST',

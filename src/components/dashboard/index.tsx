@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Film, Loader2, TrendingUp, CheckCircle2, XCircle, Clock, Share2 } from 'lucide-react'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys'
 
 export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const { data: stats, isLoading } = useQuery({
@@ -62,6 +62,10 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
             </button>
             <button onClick={() => onNavigate('social')} className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-800">
               <span>Connect social accounts</span>
+              <span>→</span>
+            </button>
+            <button onClick={() => onNavigate('apikeys')} className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-sm font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40">
+              <span>Add API Keys (required for publishing)</span>
               <span>→</span>
             </button>
             <button onClick={() => onNavigate('assets')} className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-800">

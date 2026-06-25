@@ -99,6 +99,17 @@ model Setting {
   value String
 }
 
+/// Encrypted app secrets (API keys, client secrets, etc.)
+/// Encrypted with AES-256-GCM using ENCRYPTION_KEY env var.
+model AppSecret {
+  id           String   @id // e.g. "youtube.client_id", "meta.app_secret"
+  label        String   // human-friendly name
+  platform     String   // youtube | tiktok | meta | x | other
+  cipherText   String   // base64 iv + ciphertext + tag
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 model Asset {
   id        String   @id @default(cuid())
   type      String   // watermark | intro | outro | music | font

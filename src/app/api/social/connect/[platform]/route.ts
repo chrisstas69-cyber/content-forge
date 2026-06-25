@@ -10,8 +10,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ platform: s
   const platform = platforms[platformKey]
   if (!platform) return NextResponse.json({ error: 'Unknown platform' }, { status: 404 })
 
+  // Check if credentials are configured
+  const configured = await platform.isConfigured()
+  if (!configured) {
+    return NextResponse.redirect(`${req.nextUrl.origin}/?social_error=${encodeURIComponent(`${platform.displayName} API credentials are not set. Go to Settings → API Keys to add them.`)}`)
+  }
+
   const state = randomBytes(16).toString('hex')
-  // Store state in DB for verification (use Setting table)
   await db.setting.upsert({
     where: { id: `oauth.state.${state}` },
     create: { id: `oauth.state.${state}`, value: platformKey },
@@ -20,6 +25,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ platform: s
 
   const origin = req.nextUrl.origin
   const redirectUri = `${origin}/api/social/callback/${platformKey}`
-  const url = platform.oauthUrl(redirectUri, state)
-  return NextResponse.redirect(url)
+  try {
+    const url = await platform.oauthUrl(redirectUri, state)
+    return NextResponse.redirect(url)
+  } catch (err: any) {
+    return NextResponse.redirect(`${req.nextUrl.origin}/?social_error=${encodeURIComponent(err.message)}`)
+  }
 }
