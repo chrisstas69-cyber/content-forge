@@ -136,6 +136,10 @@ export interface EditOptions {
   outputWidth?: number
   outputHeight?: number
   outputFps?: number
+  // Voiceover
+  voiceoverPath?: string
+  voiceoverVolume?: number       // 0-1, default 1.0
+  voiceoverReplaceOriginal?: boolean // if true, voiceover replaces original audio
 }
 
 export async function processVideo(
@@ -166,6 +170,11 @@ export async function processVideo(
   if (opts.outroPath) {
     parts.push('-i', opts.outroPath)
     outroIdx = inputIdx++
+  }
+  let voiceoverIdx = -1
+  if (opts.voiceoverPath) {
+    parts.push('-i', opts.voiceoverPath)
+    voiceoverIdx = inputIdx++
   }
 
   // Build filter complex
@@ -200,20 +209,47 @@ export async function processVideo(
     chains.push(`[vmain][wm]overlay=${posMap[pos]}[vmain]`)
   }
 
-  // Audio mixing
+  // Audio mixing — combine original, music, and voiceover
+  const audioChains: string[] = []
+  const audioLabels: string[] = []
+  const origVol = opts.originalVolume ?? 1.0
+
+  // Original audio (unless voiceover is replacing it)
+  if (!opts.voiceoverReplaceOriginal) {
+    audioChains.push(`[${mainIdx}:a]volume=${origVol}[aorig]`)
+    audioLabels.push('[aorig]')
+  }
+
+  // Background music
   if (opts.musicPath) {
-    const origVol = opts.originalVolume ?? 1.0
     const musicVol = opts.musicVolume ?? 0.25
-    chains.push(`[${mainIdx}:a]volume=${origVol}[aorig]`)
-    chains.push(`[${musicIdx}:a]volume=${musicVol},aloop=loop=-1:size=2e9[amusic]`)
-    chains.push(`[aorig][amusic]amix=inputs=2:duration=first:dropout_transition=0[aout]`)
-  } else {
+    audioChains.push(`[${musicIdx}:a]volume=${musicVol},aloop=loop=-1:size=2e9[amusic]`)
+    audioLabels.push('[amusic]')
+  }
+
+  // Voiceover
+  if (opts.voiceoverPath && voiceoverIdx >= 0) {
+    const voVol = opts.voiceoverVolume ?? 1.0
+    audioChains.push(`[${voiceoverIdx}:a]volume=${voVol}[avo]`)
+    audioLabels.push('[avo]')
+  }
+
+  let finalAudioLabel = 'aout'
+  if (audioLabels.length === 0) {
+    // No audio sources at all — generate silent audio matching video duration
     chains.push(`[${mainIdx}:a]anull[aout]`)
+  } else if (audioLabels.length === 1) {
+    // Single source — just rename
+    chains.push(`${audioChains[0].replace(/\]\[[a-z]+\]$/, '][aout]')}`)
+  } else {
+    // Multiple sources — mix them
+    chains.push(...audioChains)
+    chains.push(`${audioLabels.join('')}amix=inputs=${audioLabels.length}:duration=first:dropout_transition=0[aout]`)
   }
 
   // Concat intro/outro if provided
   let finalVideoLabel = 'vmain'
-  let finalAudioLabel = 'aout'
+  // finalAudioLabel already set above to 'aout'
   if (opts.introPath || opts.outroPath) {
     const concatParts: string[] = []
     if (opts.introPath) {

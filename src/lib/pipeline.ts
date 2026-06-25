@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { probeVideo, extractThumbnail, extractAudio, processVideo, SrtCue, detectSilence, convertToAspectRatio, generateFormatThumbnail, AspectRatio } from '@/lib/ffmpeg'
-import { transcribeAudio, analyzeVideoContent } from '@/lib/ai'
+import { transcribeAudio, analyzeVideoContent, generateVoiceoverScript, generateTTS } from '@/lib/ai'
+import { getTrendsContext } from '@/lib/trends'
 import { deleteFile } from '@/lib/storage'
 import path from 'path'
 import { emit } from '@/lib/event-bus'
@@ -20,6 +21,12 @@ export interface EditSettings {
   outputWidth?: number
   outputHeight?: number
   outputFps?: number
+  // Voiceover
+  voiceoverEnabled?: boolean
+  voiceoverVoice?: string
+  voiceoverTone?: string
+  voiceoverVolume?: number  // 0-1, how loud the voiceover should be in the mix
+  voiceoverReplaceOriginal?: boolean // if true, replace original audio; otherwise mix
 }
 
 async function updateVideoStatus(videoId: string, status: string, progress: number, currentStep?: string, errorMessage?: string) {
@@ -89,13 +96,22 @@ export async function processVideoPipeline(videoId: string, settings: EditSettin
     }
     await deleteFile(audioPath)
 
-    // STEP 3: AI analysis (scoring + caption + hashtags)
+    // STEP 3: AI analysis (scoring + caption + hashtags) — uses trends if available
     await updateVideoProgress(videoId, 45, 'Analyzing viral potential (AI)')
     const settings2 = await db.setting.findUnique({ where: { id: 'brand.handle' } })
     const nicheSetting = await db.setting.findUnique({ where: { id: 'content.niche' } })
+    const niche = nicheSetting?.value || 'pet content'
+    // Fetch trends context for this niche
+    let trendsContext = ''
+    try {
+      trendsContext = await getTrendsContext(niche)
+    } catch (err) {
+      console.error('Failed to fetch trends context:', err)
+    }
     const analysis = await analyzeVideoContent(transcript, {
       brandHandle: settings2?.value || '@yourhandle',
-      niche: nicheSetting?.value || 'dog / pet content',
+      niche,
+      trendsContext,
     })
     await db.video.update({
       where: { id: videoId },
@@ -107,6 +123,33 @@ export async function processVideoPipeline(videoId: string, settings: EditSettin
         viralScore: analysis.viralScore,
       },
     })
+
+    // STEP 3.5: Voiceover generation (if enabled)
+    let voiceoverPath: string | undefined
+    if (settings.voiceoverEnabled) {
+      await updateVideoProgress(videoId, 52, 'Generating AI voiceover script')
+      try {
+        const script = await generateVoiceoverScript(transcript, {
+          niche,
+          brandHandle: settings2?.value || '@yourhandle',
+          videoDescription: analysis.description,
+          tone: settings.voiceoverTone,
+        })
+        await db.video.update({
+          where: { id: videoId },
+          data: { voiceoverText: script.text, voiceoverVoice: settings.voiceoverVoice || 'tongtong' },
+        })
+        await updateVideoProgress(videoId, 56, 'Synthesizing voiceover audio (TTS)')
+        const audioBuffer = await generateTTS(script.text, settings.voiceoverVoice || 'tongtong', 1.0)
+        voiceoverPath = video.originalPath + '.voiceover.mp3'
+        const { promises: fs } = await import('fs')
+        await fs.writeFile(voiceoverPath, audioBuffer)
+        await db.video.update({ where: { id: videoId }, data: { voiceoverPath } })
+      } catch (err: any) {
+        console.error('Voiceover generation failed:', err)
+        // Continue without voiceover
+      }
+    }
 
     // STEP 4: FFmpeg processing
     await updateVideoProgress(videoId, 60, 'Editing video (FFmpeg)')
@@ -148,6 +191,10 @@ export async function processVideoPipeline(videoId: string, settings: EditSettin
       outputWidth: settings.outputWidth,
       outputHeight: settings.outputHeight,
       outputFps: settings.outputFps,
+      // Voiceover
+      voiceoverPath,
+      voiceoverVolume: settings.voiceoverVolume ?? 1.0,
+      voiceoverReplaceOriginal: settings.voiceoverReplaceOriginal ?? false,
     }, (pct) => {
       // ffmpeg progress
       const total = 60 + Math.floor(pct * 0.3)

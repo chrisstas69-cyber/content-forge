@@ -1,9 +1,9 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { Film, Loader2, TrendingUp, CheckCircle2, XCircle, Clock, Share2, CalendarClock, Layers } from 'lucide-react'
+import { Film, Loader2, TrendingUp, CheckCircle2, XCircle, Clock, Share2, CalendarClock, Layers, Sparkles } from 'lucide-react'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics'
 
 export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const { data: stats, isLoading } = useQuery({
@@ -11,6 +11,11 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
     queryFn: async () => (await fetch('/api/dashboard/stats')).json(),
     refetchInterval: 5000,
   })
+  const { data: settingsData } = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => (await fetch('/api/settings')).json(),
+  })
+  const niche = settingsData?.settings?.['content.niche'] || 'your niche'
 
   if (isLoading) {
     return <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-neutral-400" /></div>
@@ -30,7 +35,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold">Welcome back 👋</h2>
-        <p className="text-sm text-neutral-500">Your dog content automation hub. Upload videos and let the system handle editing, scoring, and publishing.</p>
+        <p className="text-sm text-neutral-500">Your AI-powered content automation hub for <strong>{niche}</strong>. Upload videos, let the system edit and score them, then publish to all platforms — or just ask the AI agent.</p>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -110,12 +115,13 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
       <div className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 rounded-xl border border-orange-200 dark:border-orange-900 p-5">
         <h3 className="font-semibold text-orange-800 dark:text-orange-200 mb-2">How it works</h3>
         <ol className="text-sm text-orange-900 dark:text-orange-100 space-y-1 list-decimal list-inside">
-          <li><strong>Upload</strong> raw dog videos via the Upload tab.</li>
-          <li>The system <strong>transcribes</strong> audio with AI and generates burned-in captions.</li>
-          <li>FFmpeg applies your <strong>watermark, music, intro/outro</strong>, and edits automatically.</li>
-          <li>AI analyzes the content and gives it a <strong>viral score (0–100)</strong>.</li>
-          <li><strong>3 formats auto-generated</strong> — vertical (9:16), horizontal (16:9), and square (1:1) for every platform.</li>
-          <li>Review, then <strong>publish now</strong> or <strong>schedule at optimal times</strong> — one click to all platforms.</li>
+          <li><strong>Upload</strong> raw videos via the Upload tab — choose captions, watermark, music, AI voiceover.</li>
+          <li>System <strong>transcribes</strong> audio and generates burned-in captions.</li>
+          <li>FFmpeg applies your <strong>watermark, music, intro/outro, voiceover</strong> automatically.</li>
+          <li>AI analyzes content vs current trends → gives a <strong>viral score (0–100)</strong> + optimized hashtags.</li>
+          <li><strong>3 formats auto-generated</strong> — vertical (9:16), horizontal (16:9), square (1:1).</li>
+          <li>Publish now or <strong>schedule at optimal times</strong> — one click to YouTube, TikTok, IG, FB, X.</li>
+          <li>💡 <strong>Or just ask the AI agent</strong> (floating button, bottom-right) — it can do all of this for you.</li>
         </ol>
       </div>
     </div>

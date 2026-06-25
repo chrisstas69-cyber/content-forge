@@ -1,6 +1,7 @@
 import ZAI from 'z-ai-web-dev-sdk'
 import { promises as fs } from 'fs'
 import { SrtCue } from './ffmpeg'
+import { getTrendsContext } from './trends'
 
 let zaiInstance: any = null
 
@@ -10,6 +11,17 @@ async function getZai() {
   }
   return zaiInstance
 }
+
+// Available TTS voices
+export const AVAILABLE_VOICES = [
+  { id: 'tongtong', name: 'Tongtong (Warm, friendly)', gender: 'neutral' },
+  { id: 'female-tianmei', name: 'Tianmei (Female, cheerful)', gender: 'female' },
+  { id: 'male-yunlong', name: 'Yunlong (Male, deep)', gender: 'male' },
+  { id: 'female-shaonv', name: 'Shaonv (Female, young)', gender: 'female' },
+  { id: 'male-yunhao', name: 'Yunhao (Male, energetic)', gender: 'male' },
+  { id: 'female-yujia', name: 'Yujia (Female, calm)', gender: 'female' },
+  { id: 'male-siling', name: 'Siling (Male, authoritative)', gender: 'male' },
+]
 
 // Transcribe audio file using ZAI ASR (returns segments)
 export interface TranscriptSegment {
@@ -64,10 +76,12 @@ export interface VideoAnalysis {
   improvements: string[]
 }
 
-export async function analyzeVideoContent(transcript: string, opts: { niche?: string; brandHandle?: string } = {}): Promise<VideoAnalysis> {
+export async function analyzeVideoContent(transcript: string, opts: { niche?: string; brandHandle?: string; trendsContext?: string } = {}): Promise<VideoAnalysis> {
   const zai = await getZai()
   const niche = opts.niche || 'dog / pet content'
   const handle = opts.brandHandle || '@yourhandle'
+  const trendsBlock = opts.trendsContext ? `\n\n${opts.trendsContext}\n` : ''
+
   const prompt = `You are a viral short-form video strategist specialized in ${niche}.
 
 Transcript of the video:
@@ -76,13 +90,13 @@ ${transcript || '(no speech detected — likely a visual/atmospheric clip)'}
 """
 
 Brand handle: ${handle}
-
+${trendsBlock}
 Produce a JSON object (NO markdown, NO commentary, ONLY valid JSON) with this exact shape:
 {
   "title": "a scroll-stopping title under 80 chars, optimized for ${niche}",
   "description": "a 2-3 sentence YouTube/TikTok description",
   "caption": "an Instagram/Facebook caption with emojis, max 220 chars, ending with the handle",
-  "hashtags": ["array", "of", "8-12", "relevant", "hashtags", "without", "the", "hash", "symbol"],
+  "hashtags": ["array", "of", "8-12", "relevant", "hashtags", "without", "the", "hash", "symbol", "PRIORITIZE currently trending ones if available above"],
   "viralScore": <integer 0-100 based on hook strength, emotional pull, trend alignment, rewatchability>,
   "viralReasons": ["bullet", "list", "of", "3-5", "reasons", "for", "the", "score"],
   "improvements": ["3-5", "actionable", "improvement", "suggestions"]
@@ -124,4 +138,86 @@ Return ONLY the JSON.`
       improvements: [],
     }
   }
+}
+
+// ---- Voiceover generation ----
+export interface VoiceoverScript {
+  text: string
+  tone: string
+  estimatedDuration: number
+}
+
+export async function generateVoiceoverScript(
+  transcript: string,
+  opts: { niche?: string; brandHandle?: string; videoDescription?: string; tone?: string } = {},
+): Promise<VoiceoverScript> {
+  const zai = await getZai()
+  const niche = opts.niche || 'pet content'
+  const handle = opts.brandHandle || '@yourhandle'
+  const tone = opts.tone || 'funny, energetic, engaging'
+
+  const prompt = `You are a viral video scriptwriter specialized in ${niche}.
+Write a short voiceover script (under 30 seconds when read aloud, ~60-80 words) for a video.
+
+Original transcript (if any):
+"""
+${transcript || '(no speech)'}
+"""
+
+${opts.videoDescription ? `Video description: ${opts.videoDescription}\n` : ''}
+Tone: ${tone}
+Brand handle: ${handle}
+
+The script should:
+- Hook in the first 3 seconds
+- Be conversational and fun (NOT a corporate ad)
+- Reference the brand handle at the end if natural
+- Avoid generic phrases like "in this video we will..."
+- Sound like a real person talking to their audience
+
+Return ONLY a JSON object:
+{
+  "text": "the voiceover script as a single string",
+  "tone": "the tone you used (one phrase)",
+  "estimatedDuration": 20
+}`
+
+  const result = await zai.chat.completions.create({
+    messages: [
+      { role: 'system', content: 'You are a JSON-only assistant. Output valid JSON, no extra text.' },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.9,
+  })
+  const content = result.choices?.[0]?.message?.content || ''
+  const match = content.match(/\{[\s\S]*\}/)
+  if (!match) {
+    return {
+      text: `Hey friends! Check this out. If you love this content, follow ${handle} for more!`,
+      tone,
+      estimatedDuration: 15,
+    }
+  }
+  try {
+    return JSON.parse(match[0])
+  } catch {
+    return {
+      text: `Hey friends! Check this out. If you love this content, follow ${handle} for more!`,
+      tone,
+      estimatedDuration: 15,
+    }
+  }
+}
+
+export async function generateTTS(text: string, voice: string = 'tongtong', speed: number = 1.0): Promise<Buffer> {
+  const zai = await getZai()
+  const response: any = await zai.audio.tts.create({
+    input: text,
+    voice,
+    speed,
+    response_format: 'mp3',
+    stream: false,
+  })
+  const arrayBuffer = await response.arrayBuffer()
+  return Buffer.from(new Uint8Array(arrayBuffer))
 }

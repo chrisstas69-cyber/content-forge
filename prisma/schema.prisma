@@ -31,6 +31,12 @@ model Video {
   aiTitle        String?
   aiDescription  String?
 
+  // Voiceover
+  voiceoverText  String?  // AI-generated script
+  voiceoverVoice String?  // voice ID used
+  voiceoverPath  String?  // path to generated audio
+  voiceoverEnabled Boolean @default(false)
+
   // Status: pending | transcribing | editing | scoring | ready | publishing | published | failed
   status         String   @default("pending")
   progress       Int      @default(0)
@@ -45,6 +51,7 @@ model Video {
 
   jobs           Job[]
   posts          Post[]
+  analytics      AnalyticsCache[]
 }
 
 model Job {
@@ -95,6 +102,7 @@ model Post {
   publishedAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  analytics    AnalyticsCache[]
 }
 
 model Setting {
@@ -121,4 +129,56 @@ model Asset {
   mimeType  String
   sizeBytes Int
   createdAt DateTime @default(now())
+}
+
+/// Trending hashtags, sounds, formats scraped from web search
+model Trend {
+  id         String   @id @default(cuid())
+  platform   String   // tiktok | instagram | youtube | x | reddit | general
+  type       String   // hashtag | sound | format | topic
+  content    String   // the hashtag/sound name or topic description
+  niche      String   // niche context (e.g. "dog / pet content")
+  summary    String?  // short description of why it's trending
+  sourceUrl  String?
+  score      Int      @default(0) // relevance score 0-100
+  freshness  DateTime @default(now()) // when this trend was discovered
+  createdAt  DateTime @default(now())
+  @@index([platform, niche])
+  @@index([freshness])
+}
+
+/// Cached analytics metrics per post (refreshed periodically)
+model AnalyticsCache {
+  id         String   @id @default(cuid())
+  postId     String
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  videoId    String
+  video      Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  platform   String
+  metrics    String   // JSON: { views, likes, comments, shares, saves, reach, impressions }
+  fetchedAt  DateTime @default(now())
+  @@index([videoId])
+  @@index([fetchedAt])
+}
+
+/// AI Agent conversation history
+model AgentConversation {
+  id         String   @id @default(cuid())
+  title      String   @default("New conversation")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  messages   AgentMessage[]
+}
+
+model AgentMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String   // user | assistant | tool
+  content        String
+  toolCalls      String?  // JSON array of tool calls (for assistant)
+  toolCallId     String?  // for role=tool, the tool call this responds to
+  toolName       String?  // for role=tool, which tool was called
+  createdAt      DateTime @default(now())
+  @@index([conversationId])
 }

@@ -17,6 +17,12 @@ export function Upload() {
     musicVolume: 0.2,
     originalVolume: 1.0,
     autoTrimSilence: false,
+    // Voiceover
+    voiceoverEnabled: false,
+    voiceoverVoice: 'tongtong',
+    voiceoverTone: 'funny, energetic, engaging',
+    voiceoverVolume: 1.0,
+    voiceoverReplaceOriginal: false,
   })
   const fileInput = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
@@ -172,6 +178,45 @@ export function Upload() {
               ))}
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* Voiceover section */}
+      <div className="mt-4 bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5">
+        <h3 className="font-semibold text-sm mb-4">AI Voiceover</h3>
+        <div className="space-y-4">
+          <Toggle label="Enable AI voiceover" desc="Generate a script in your brand voice and mix it over the video" checked={settings.voiceoverEnabled} onChange={v => setSettings(s => ({ ...s, voiceoverEnabled: v }))} />
+
+          {settings.voiceoverEnabled && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Voice</label>
+                <select
+                  value={settings.voiceoverVoice}
+                  onChange={e => setSettings(s => ({ ...s, voiceoverVoice: e.target.value }))}
+                  className="w-full mt-1 px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm"
+                >
+                  <option value="tongtong">Tongtong (Warm, friendly)</option>
+                  <option value="female-tianmei">Tianmei (Female, cheerful)</option>
+                  <option value="male-yunlong">Yunlong (Male, deep)</option>
+                  <option value="female-shaonv">Shaonv (Female, young)</option>
+                  <option value="male-yunhao">Yunhao (Male, energetic)</option>
+                  <option value="female-yujia">Yujia (Female, calm)</option>
+                  <option value="male-siling">Siling (Male, authoritative)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Tone</label>
+                <input
+                  value={settings.voiceoverTone}
+                  onChange={e => setSettings(s => ({ ...s, voiceoverTone: e.target.value }))}
+                  placeholder="e.g. funny, energetic, engaging"
+                  className="w-full mt-1 px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm"
+                />
+              </div>
+              <Toggle label="Replace original audio" desc="If on, voiceover replaces all original sound. Off = mixes on top." checked={settings.voiceoverReplaceOriginal || false} onChange={v => setSettings(s => ({ ...s, voiceoverReplaceOriginal: v }))} />
+            </div>
+          )}
         </div>
       </div>
 

@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/publish-scheduled",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/trends/refresh",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/analytics/refresh",
+      "schedule": "0 * * * *"
     }
   ]
 }

@@ -15,10 +15,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Dog Content Automation System",
-  description: "Upload, auto-edit, score, and publish dog videos to all social media platforms.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
+  title: "ContentForge — AI Content Automation",
+  description: "Upload, auto-edit, score, and publish videos to all social media platforms. Includes AI agent, trend research, and analytics.",
+  keywords: ["content automation", "AI video editing", "social media scheduler", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
+  authors: [{ name: "ContentForge" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },

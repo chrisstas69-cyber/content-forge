@@ -5,10 +5,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Upload } from '@/components/dashboard/upload'
 import { Dashboard } from '@/components/dashboard'
 import { ApiKeys } from '@/components/dashboard/api-keys'
+import { AgentChat } from '@/components/dashboard/agent-chat'
+import { Trends } from '@/components/dashboard/trends'
+import { Analytics } from '@/components/dashboard/analytics'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -66,17 +69,20 @@ export default function Home() {
         {tab === 'library' && <Library />}
         {tab === 'social' && <SocialAccounts onNavigate={setTab} />}
         {tab === 'scheduled' && <Scheduled />}
+        {tab === 'trends' && <Trends />}
+        {tab === 'analytics' && <Analytics />}
         {tab === 'settings' && <Settings />}
         {tab === 'assets' && <Assets />}
         {tab === 'apikeys' && <ApiKeys />}
       </main>
       <Footer />
+      <AgentChat />
       <Toaster richColors position="bottom-right" />
     </div>
   )
 }
 
-import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles } from 'lucide-react'
 
 function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const items: { id: Tab; label: string; icon: any }[] = [
@@ -85,6 +91,8 @@ function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     { id: 'library', label: 'Library', icon: Film },
     { id: 'social', label: 'Social', icon: Share2 },
     { id: 'scheduled', label: 'Scheduled', icon: CalendarClock },
+    { id: 'trends', label: 'Trends', icon: TrendingUp },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'apikeys', label: 'API Keys', icon: KeyRound },
     { id: 'assets', label: 'Assets', icon: ImageIcon },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
@@ -95,11 +103,11 @@ function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
         <div className="flex h-16 items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="size-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center shadow-sm">
-              <PawPrint className="size-5 text-white" />
+              <Sparkles className="size-5 text-white" />
             </div>
             <div>
-              <h1 className="text-base font-bold leading-none">DogContent</h1>
-              <p className="text-[10px] text-neutral-500 leading-none mt-1">Automation System</p>
+              <h1 className="text-base font-bold leading-none">ContentForge</h1>
+              <p className="text-[10px] text-neutral-500 leading-none mt-1">AI Content Automation</p>
             </div>
           </div>
           <nav className="hidden md:flex items-center gap-1">
@@ -140,8 +148,8 @@ function Footer() {
   return (
     <footer className="mt-auto border-t border-neutral-200 dark:border-neutral-800 py-4">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-neutral-500">
-        <span>Dog Content Automation System · Self-hosted · Real FFmpeg + AI pipeline</span>
-        <span>Upload → Transcribe → Edit → Score → Publish</span>
+        <span>ContentForge · AI Content Automation · Self-hosted</span>
+        <span>Upload → Edit → Score → Publish · with AI Agent</span>
       </div>
     </footer>
   )
