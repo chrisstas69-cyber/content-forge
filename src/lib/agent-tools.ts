@@ -563,6 +563,188 @@ export const agentTools: AgentTool[] = [
       }
     },
   },
+  // ---- NEW: Comment reply tools ----
+  {
+    name: 'fetch_comments',
+    description: 'Fetch new comments from all published posts and generate AI replies. Use when the user asks about comments or wants to reply to their audience.',
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      const { fetchAndProcessComments } = await import('@/lib/comments')
+      const result = await fetchAndProcessComments()
+      return { ok: true, ...result, message: `Fetched ${result.fetched} comments, suggested ${result.suggested} replies, auto-replied ${result.replied}` }
+    },
+  },
+  {
+    name: 'list_comments',
+    description: 'List comments with their AI-suggested replies. Filter by status: pending, replied, ignored.',
+    parameters: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', description: 'Filter: pending, replied, ignored, all' },
+      },
+    },
+    handler: async (args) => {
+      const where: any = {}
+      if (args.status && args.status !== 'all') where.replyStatus = args.status
+      const comments = await db.comment.findMany({
+        where,
+        include: { post: { include: { video: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      })
+      return {
+        count: comments.length,
+        comments: comments.map(c => ({
+          id: c.id,
+          platform: c.platform,
+          author: c.authorName,
+          text: c.text,
+          replyStatus: c.replyStatus,
+          replyText: c.replyText,
+          videoTitle: c.post?.video?.aiTitle || c.post?.title,
+        })),
+      }
+    },
+  },
+  {
+    name: 'approve_comment_reply',
+    description: 'Approve and post an AI-suggested reply to a comment. Optionally provide custom reply text.',
+    parameters: {
+      type: 'object',
+      properties: {
+        commentId: { type: 'string' },
+        customReply: { type: 'string', description: 'Optional custom reply text (otherwise uses the AI suggestion)' },
+      },
+      required: ['commentId'],
+    },
+    handler: async (args) => {
+      const { approveAndPostReply } = await import('@/lib/comments')
+      try {
+        await approveAndPostReply(args.commentId, args.customReply)
+        return { ok: true, message: 'Reply posted successfully' }
+      } catch (err: any) {
+        return { error: err?.message || 'Failed to post reply' }
+      }
+    },
+  },
+  {
+    name: 'get_voice_profile',
+    description: 'Get the user\'s voice profile — persona, tone, signature phrases, auto-reply settings.',
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      const { getVoiceProfile } = await import('@/lib/comments')
+      const vp = await getVoiceProfile()
+      return vp || { message: 'No voice profile configured yet' }
+    },
+  },
+  {
+    name: 'update_voice_profile',
+    description: 'Update the user\'s voice profile. This affects how AI generates replies and scripts.',
+    parameters: {
+      type: 'object',
+      properties: {
+        persona: { type: 'string', description: 'e.g. "friendly dog mom who loves puns"' },
+        tone: { type: 'string', description: 'e.g. "warm, witty, enthusiastic"' },
+        signaturePhrases: { type: 'string', description: 'comma-separated phrases to use' },
+        autoReplyMode: { type: 'string', description: 'suggest (manual approval) or auto (auto-reply)' },
+      },
+    },
+    handler: async (args) => {
+      const { saveVoiceProfile } = await import('@/lib/comments')
+      const vp = await saveVoiceProfile(args)
+      return { ok: true, voiceProfile: vp }
+    },
+  },
+  // ---- NEW: Hook A/B testing tools ----
+  {
+    name: 'generate_hooks',
+    description: 'Generate 5 hook variants (opening text overlays) for a video. Each is a different style: question, bold claim, curiosity, stat, story. Use when the user wants to test different openings.',
+    parameters: {
+      type: 'object',
+      properties: {
+        videoId: { type: 'string' },
+      },
+      required: ['videoId'],
+    },
+    handler: async (args) => {
+      const { generateHookVariants } = await import('@/lib/hooks')
+      const result = await generateHookVariants(args.videoId)
+      return {
+        ok: true,
+        count: result.hooks.length,
+        hooks: result.hooks,
+      }
+    },
+  },
+  {
+    name: 'get_hook_insights',
+    description: 'Get insights on which hook styles perform best for this user based on past performance data.',
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      const { getHookInsights } = await import('@/lib/hooks')
+      const result = await getHookInsights()
+      return result
+    },
+  },
+  // ---- NEW: Competitor monitoring tools ----
+  {
+    name: 'add_competitor',
+    description: 'Add a competitor to monitor. AI will alert you when their posts go viral.',
+    parameters: {
+      type: 'object',
+      properties: {
+        platform: { type: 'string', description: 'youtube, tiktok, instagram, x' },
+        handle: { type: 'string', description: 'competitor handle without @' },
+      },
+      required: ['platform', 'handle'],
+    },
+    handler: async (args) => {
+      const competitor = await db.competitor.upsert({
+        where: { platform_handle: { platform: args.platform, handle: args.handle.replace('@', '') } },
+        create: { platform: args.platform, handle: args.handle.replace('@', ''), active: true },
+        update: { active: true },
+      })
+      return { ok: true, competitor, message: `Now monitoring @${args.handle} on ${args.platform}` }
+    },
+  },
+  {
+    name: 'list_competitors',
+    description: 'List all tracked competitors.',
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      const competitors = await db.competitor.findMany({ include: { posts: { take: 1 } } })
+      return {
+        count: competitors.length,
+        competitors: competitors.map(c => ({
+          id: c.id,
+          platform: c.platform,
+          handle: c.handle,
+          active: c.active,
+          lastChecked: c.lastChecked,
+        })),
+      }
+    },
+  },
+  {
+    name: 'get_competitor_alerts',
+    description: 'Get viral alerts from monitored competitors — posts that scored 70+ on our viral scale, with AI suggestions on how to create your own version.',
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      const { getCompetitorAlerts } = await import('@/lib/competitors')
+      const alerts = await getCompetitorAlerts()
+      return { count: alerts.length, alerts }
+    },
+  },
+  {
+    name: 'refresh_competitors',
+    description: 'Check all monitored competitors for new viral posts. Use when the user asks "what are my competitors up to?"',
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      const { refreshCompetitors } = await import('@/lib/competitors')
+      const result = await refreshCompetitors()
+      return { ok: true, ...result, message: `Checked ${result.checked} competitors, found ${result.newPosts} new posts, ${result.alerts} viral alerts` }
+    },
+  },
 ]
 
 export function getToolByName(name: string): AgentTool | undefined {

@@ -63,6 +63,7 @@ model Video {
   jobs           Job[]
   posts          Post[]
   analytics      AnalyticsCache[]
+  hookVariants   HookVariant[]
 }
 
 model Job {
@@ -114,6 +115,7 @@ model Post {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   analytics    AnalyticsCache[]
+  comments     Comment[]
 }
 
 model Setting {
@@ -256,4 +258,83 @@ model BrandKit {
   watermarkOpacity Float?
   watermarkScale Float?
   updatedAt    DateTime @updatedAt
+}
+
+/// Voice Profile — defines the user's persona for AI-generated replies + scripts
+model VoiceProfile {
+  id              String   @id @default("default")
+  persona         String   // e.g. "friendly dog mom who loves puns"
+  tone            String   // e.g. "warm, witty, enthusiastic"
+  signaturePhrases String? // e.g. "pawsome, fur-real, zoomies"
+  avoidPhrases    String?  // phrases to never use
+  autoReplyMode   String   @default("suggest") // suggest | auto
+  replyLength     String   @default("short") // short | medium | long
+  updatedAt       DateTime @updatedAt
+}
+
+/// Comments fetched from social platforms — for auto-reply
+model Comment {
+  id              String   @id @default(cuid())
+  postId          String
+  post            Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  platformCommentId String
+  platform        String
+  authorName      String
+  authorHandle    String?
+  text            String
+  replyStatus     String   @default("pending") // pending | replied | ignored | failed
+  replyText       String?
+  replyError      String?
+  repliedAt       DateTime?
+  fetchedAt       DateTime @default(now())
+  createdAt       DateTime @default(now())
+  @@unique([postId, platformCommentId])
+  @@index([replyStatus])
+}
+
+/// Hook A/B variants — opening text overlays for testing
+model HookVariant {
+  id              String   @id @default(cuid())
+  videoId         String
+  video           Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  hookText        String   // the opening 3-second text overlay
+  hookStyle       String   // question | bold-claim | curiosity | stat | story
+  postId          String?  // if used in a published post
+  performance     String?  // JSON: { views, likes, comments } at 24h
+  isWinner        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  @@index([videoId])
+}
+
+/// Competitor accounts being monitored
+model Competitor {
+  id           String   @id @default(cuid())
+  platform     String   // youtube | tiktok | instagram | facebook | x
+  handle       String
+  displayName  String?
+  lastChecked  DateTime?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  posts        CompetitorPost[]
+  @@unique([platform, handle])
+}
+
+/// Posts from monitored competitors
+model CompetitorPost {
+  id              String   @id @default(cuid())
+  competitorId    String
+  competitor      Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  platformPostId  String
+  platform        String
+  title           String?
+  description     String?
+  url             String
+  metrics         String?  // JSON: { views, likes, comments, shares }
+  viralScore      Int?     // our AI's estimate
+  suggestedAction String?  // AI's suggestion for how to respond
+  alertSent       Boolean  @default(false)
+  postedAt        DateTime?
+  fetchedAt       DateTime @default(now())
+  @@unique([competitorId, platformPostId])
+  @@index([alertSent])
 }
