@@ -166,8 +166,8 @@ function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
               <p className="text-[10px] text-neutral-500 leading-none mt-1">AI Content Automation</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <nav className="hidden md:flex items-center gap-1">
+          <div className="flex items-center gap-3 flex-1 justify-end max-w-[calc(100vw-200px)]">
+            <nav className="hidden md:flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full py-1 select-none">
               {items.map(item => {
                 const Icon = item.icon
                 const active = tab === item.id
@@ -175,7 +175,7 @@ function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                   <button
                     key={item.id}
                     onClick={() => setTab(item.id)}
-                    className={`inline-flex items-center gap-2 px-3 h-9 rounded-lg text-sm font-medium transition-colors ${
+                    className={`inline-flex items-center gap-2 px-3 h-9 rounded-lg text-sm font-medium transition-colors shrink-0 ${
                       active ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
                     }`}
                   >
