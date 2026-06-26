@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Film, Loader2, TrendingUp, CheckCircle2, XCircle, Clock, Share2, CalendarClock, Layers, Sparkles } from 'lucide-react'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar' | 'brandkit'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar' | 'brandkit' | 'comments' | 'competitors' | 'voice'
 
 export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const { data: stats, isLoading } = useQuery({

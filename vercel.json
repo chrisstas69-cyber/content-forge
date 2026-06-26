@@ -11,6 +11,18 @@
     {
       "path": "/api/analytics/refresh",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/insights/refresh",
+      "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/comments?cron=1",
+      "schedule": "0 9,12,15,18 * * *"
+    },
+    {
+      "path": "/api/competitors/refresh",
+      "schedule": "0 7 * * *"
     }
   ]
 }
