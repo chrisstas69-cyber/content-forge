@@ -22,6 +22,11 @@ export const metadata: Metadata = {
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "ContentForge",
+  },
   openGraph: {
     title: "Z.ai Code Scaffold",
     description: "AI-powered development with modern React stack",
