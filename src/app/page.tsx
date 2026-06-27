@@ -915,14 +915,32 @@ function Settings() {
     queryFn: async () => (await fetch('/api/settings')).json(),
   })
   const settings: Record<string, string> = data?.settings || {}
+  
   const [brandHandle, setBrandHandle] = useState(settings['brand.handle'] || '@yourhandle')
   const [niche, setNiche] = useState(settings['content.niche'] || 'dog / pet content')
+  
+  const [provider, setProvider] = useState(settings['llm.provider'] || 'zai')
+  const [openrouterModel, setOpenrouterModel] = useState(settings['llm.openrouter.model'] || 'meta-llama/llama-3.1-8b-instruct:free')
+  const [openaiModel, setOpenaiModel] = useState(settings['llm.openai.model'] || 'gpt-4o-mini')
+  const [geminiModel, setGeminiModel] = useState(settings['llm.gemini.model'] || 'gemini-1.5-flash')
+  
+  const [ideationModel, setIdeationModel] = useState(settings['llm.model.ideation'] || '')
+  const [scriptsModel, setScriptsModel] = useState(settings['llm.model.scripts'] || '')
+  const [analysisModel, setAnalysisModel] = useState(settings['llm.model.analysis'] || '')
+  
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!isLoading) {
       setBrandHandle(settings['brand.handle'] || '@yourhandle')
       setNiche(settings['content.niche'] || 'dog / pet content')
+      setProvider(settings['llm.provider'] || 'zai')
+      setOpenrouterModel(settings['llm.openrouter.model'] || 'meta-llama/llama-3.1-8b-instruct:free')
+      setOpenaiModel(settings['llm.openai.model'] || 'gpt-4o-mini')
+      setGeminiModel(settings['llm.gemini.model'] || 'gemini-1.5-flash')
+      setIdeationModel(settings['llm.model.ideation'] || '')
+      setScriptsModel(settings['llm.model.scripts'] || '')
+      setAnalysisModel(settings['llm.model.analysis'] || '')
     }
   }, [isLoading, data])
 
@@ -936,6 +954,13 @@ function Settings() {
           settings: [
             { id: 'brand.handle', value: brandHandle },
             { id: 'content.niche', value: niche },
+            { id: 'llm.provider', value: provider },
+            { id: 'llm.openrouter.model', value: openrouterModel },
+            { id: 'llm.openai.model', value: openaiModel },
+            { id: 'llm.gemini.model', value: geminiModel },
+            { id: 'llm.model.ideation', value: ideationModel },
+            { id: 'llm.model.scripts', value: scriptsModel },
+            { id: 'llm.model.analysis', value: analysisModel },
           ],
         }),
       })
@@ -946,9 +971,14 @@ function Settings() {
   }
 
   return (
-    <div className="max-w-xl">
-      <h2 className="text-xl font-bold mb-4">Settings</h2>
+    <div className="max-w-xl space-y-6">
+      <div>
+        <h2 className="text-xl font-bold">Settings</h2>
+        <p className="text-xs text-neutral-500 mt-1">Configure your brand identity and model behaviors.</p>
+      </div>
+
       <div className="space-y-4 bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5">
+        <h3 className="text-sm font-semibold border-b border-neutral-100 dark:border-neutral-800 pb-2">Brand Info</h3>
         <div>
           <label className="text-sm font-medium">Brand Handle</label>
           <p className="text-xs text-neutral-500 mt-0.5">Used in AI-generated captions and taglines.</p>
@@ -959,12 +989,72 @@ function Settings() {
           <p className="text-xs text-neutral-500 mt-0.5">Tells the AI what kind of content you make.</p>
           <input value={niche} onChange={e => setNiche(e.target.value)} className="w-full mt-2 px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm" />
         </div>
+      </div>
+
+      <div className="space-y-4 bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5">
+        <h3 className="text-sm font-semibold border-b border-neutral-100 dark:border-neutral-800 pb-2">AI Language Model Configuration</h3>
+        
+        <div>
+          <label className="text-sm font-medium">Default AI Provider</label>
+          <p className="text-xs text-neutral-500 mt-0.5">Select which LLM backend API to query. (Note: make sure to enter keys in the API Keys tab).</p>
+          <select value={provider} onChange={e => setProvider(e.target.value)} className="w-full mt-2 px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm">
+            <option value="zai">Sandbox (ZAI - No keys required)</option>
+            <option value="openai">OpenAI (GPT)</option>
+            <option value="openrouter">OpenRouter (DeepSeek, Llama, Nemotron)</option>
+            <option value="gemini">Google Gemini</option>
+          </select>
+        </div>
+
+        {provider === 'openai' && (
+          <div>
+            <label className="text-sm font-medium">Default OpenAI Model</label>
+            <input value={openaiModel} onChange={e => setOpenaiModel(e.target.value)} className="w-full mt-2 px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm" placeholder="e.g. gpt-4o-mini" />
+          </div>
+        )}
+
+        {provider === 'openrouter' && (
+          <div>
+            <label className="text-sm font-medium">Default OpenRouter Model</label>
+            <p className="text-xs text-neutral-500 mt-0.5">Type any model ID supported by OpenRouter.</p>
+            <input value={openrouterModel} onChange={e => setOpenrouterModel(e.target.value)} className="w-full mt-2 px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm" placeholder="e.g. meta-llama/llama-3.1-8b-instruct:free" />
+          </div>
+        )}
+
+        {provider === 'gemini' && (
+          <div>
+            <label className="text-sm font-medium">Default Gemini Model</label>
+            <input value={geminiModel} onChange={e => setGeminiModel(e.target.value)} className="w-full mt-2 px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm" placeholder="e.g. gemini-1.5-flash" />
+          </div>
+        )}
+
+        <div className="pt-4 border-t border-neutral-100 dark:border-neutral-800 space-y-4">
+          <h4 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Task-Specific Model Overrides (Optional)</h4>
+          <p className="text-[11px] text-neutral-500 leading-relaxed">Leave empty to use your default provider model. Perfect for selecting specialized task models (e.g., DeepSeek for ideation, Nemotron for scriptwriting).</p>
+          
+          <div>
+            <label className="text-xs font-medium">Ideation Model Override (e.g. Ideas Generator)</label>
+            <input value={ideationModel} onChange={e => setIdeationModel(e.target.value)} className="w-full mt-1.5 px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-xs" placeholder="e.g. deepseek/deepseek-chat or gpt-4o" />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium">Scriptwriting Model Override (Voiceover scripts)</label>
+            <input value={scriptsModel} onChange={e => setScriptsModel(e.target.value)} className="w-full mt-1.5 px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-xs" placeholder="e.g. nvidia/llama-3.1-nemotron-70b-instruct" />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium">Video Analysis &amp; Viral Scoring Model Override</label>
+            <input value={analysisModel} onChange={e => setAnalysisModel(e.target.value)} className="w-full mt-1.5 px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-xs" placeholder="e.g. google/gemini-pro-1.5 or gpt-4o" />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
         <button
           onClick={save}
           disabled={saving}
-          className="px-4 py-2 rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 text-sm font-medium disabled:opacity-50"
+          className="px-5 py-2.5 rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-950 text-sm font-semibold disabled:opacity-50 transition-colors shadow-sm"
         >
-          {saving ? 'Saving…' : 'Save Settings'}
+          {saving ? 'Saving…' : 'Save Configurations'}
         </button>
       </div>
     </div>

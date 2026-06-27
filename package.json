@@ -90,5 +90,17 @@
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.5",
     "typescript": "^5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "@prisma/client",
+      "@prisma/engines",
+      "@swc/core",
+      "es5-ext",
+      "prisma",
+      "sharp",
+      "unrs-resolver"
+    ]
   }
 }

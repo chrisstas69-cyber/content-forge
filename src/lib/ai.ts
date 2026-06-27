@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import { SrtCue } from './ffmpeg'
 import { getTrendsContext } from './trends'
 import { getSecret } from '@/lib/secrets'
+import { db } from '@/lib/db'
 
 let zaiInstance: any = null
 
@@ -19,11 +20,52 @@ export async function getZai() {
             const openaiKey = await getSecret('openai.api_key')
             const geminiKey = await getSecret('gemini.api_key')
             
+            // Get LLM configurations from database settings
+            const activeProviderRow = await db.setting.findUnique({ where: { id: 'llm.provider' } })
+            const activeProvider = activeProviderRow?.value || 'zai'
+            
+            const openrouterModelRow = await db.setting.findUnique({ where: { id: 'llm.openrouter.model' } })
+            const openrouterModel = openrouterModelRow?.value || 'meta-llama/llama-3.1-8b-instruct:free'
+
+            const openaiModelRow = await db.setting.findUnique({ where: { id: 'llm.openai.model' } })
+            const openaiModel = openaiModelRow?.value || 'gpt-4o-mini'
+
+            const geminiModelRow = await db.setting.findUnique({ where: { id: 'llm.gemini.model' } })
+            const geminiModel = geminiModelRow?.value || 'gemini-1.5-flash'
+            
             const messages = params.messages
             const temperature = params.temperature ?? 0.7
             
+            // Resolve task-specific model overrides
+            const promptText = messages.map(m => m.content).join('\n').toLowerCase()
+            let overrideModel = ''
+            
+            if (promptText.includes('scriptwriter') || promptText.includes('voiceover script')) {
+              overrideModel = (await db.setting.findUnique({ where: { id: 'llm.model.scripts' } }))?.value || ''
+            } else if (promptText.includes('viralscore') || promptText.includes('viral reasons') || promptText.includes('video strategist')) {
+              overrideModel = (await db.setting.findUnique({ where: { id: 'llm.model.analysis' } }))?.value || ''
+            } else if (promptText.includes('content ideas') || promptText.includes('content idea') || promptText.includes('scriptoutline') || promptText.includes('ideas/concepts')) {
+              overrideModel = (await db.setting.findUnique({ where: { id: 'llm.model.ideation' } }))?.value || ''
+            }
+
+            // Decide which provider to use
+            let selectedProvider = 'zai'
+            if (activeProvider === 'openrouter' && openrouterKey) {
+              selectedProvider = 'openrouter'
+            } else if (activeProvider === 'openai' && openaiKey) {
+              selectedProvider = 'openai'
+            } else if (activeProvider === 'gemini' && geminiKey) {
+              selectedProvider = 'gemini'
+            } else if (openrouterKey) {
+              selectedProvider = 'openrouter'
+            } else if (openaiKey) {
+              selectedProvider = 'openai'
+            } else if (geminiKey) {
+              selectedProvider = 'gemini'
+            }
+
             // 1. OpenRouter
-            if (openrouterKey) {
+            if (selectedProvider === 'openrouter') {
               try {
                 const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                   method: 'POST',
@@ -34,7 +76,7 @@ export async function getZai() {
                     'X-Title': 'ContentForge'
                   },
                   body: JSON.stringify({
-                    model: 'openai/gpt-4o-mini',
+                    model: overrideModel || openrouterModel,
                     messages,
                     temperature
                   })
@@ -55,7 +97,7 @@ export async function getZai() {
             }
             
             // 2. OpenAI
-            if (openaiKey) {
+            if (selectedProvider === 'openai') {
               try {
                 const res = await fetch('https://api.openai.com/v1/chat/completions', {
                   method: 'POST',
@@ -64,7 +106,7 @@ export async function getZai() {
                     'Authorization': `Bearer ${openaiKey}`
                   },
                   body: JSON.stringify({
-                    model: 'gpt-4o-mini',
+                    model: overrideModel || openaiModel,
                     messages,
                     temperature
                   })
@@ -85,9 +127,10 @@ export async function getZai() {
             }
             
             // 3. Gemini
-            if (geminiKey) {
+            if (selectedProvider === 'gemini') {
               try {
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+                const targetModel = overrideModel || geminiModel
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${geminiKey}`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json'
@@ -123,7 +166,7 @@ export async function getZai() {
               }
             }
             
-            // Fallback to default SDK
+            // Fallback to default ZAI SDK completions
             return rawZai.chat.completions.create(params)
           }
         }
