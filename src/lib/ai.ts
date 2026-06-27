@@ -9,10 +9,21 @@ let zaiInstance: any = null
 
 export async function getZai() {
   if (!zaiInstance) {
-    const rawZai = await ZAI.create()
+    let rawZai: any = null
+    try {
+      rawZai = await ZAI.create()
+    } catch (err: any) {
+      console.warn('Sandbox ZAI SDK failed to initialize:', err.message)
+    }
+
     zaiInstance = {
-      ...rawZai,
-      audio: rawZai.audio,
+      audio: rawZai ? rawZai.audio : {
+        speech: {
+          create: async () => {
+            throw new Error('Audio generation is unavailable: Sandbox ZAI SDK is not configured in this environment.')
+          }
+        }
+      },
       chat: {
         completions: {
           create: async (params: { messages: any[]; temperature?: number }) => {
@@ -167,7 +178,10 @@ export async function getZai() {
             }
             
             // Fallback to default ZAI SDK completions
-            return rawZai.chat.completions.create(params)
+            if (rawZai) {
+              return rawZai.chat.completions.create(params)
+            }
+            throw new Error('AI Completions failed: No valid API key is configured (OpenRouter, OpenAI, or Gemini) and Sandbox ZAI SDK is not initialized.')
           }
         }
       }
