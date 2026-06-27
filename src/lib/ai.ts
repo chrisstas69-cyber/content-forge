@@ -36,7 +36,7 @@ export async function getZai() {
             const activeProvider = activeProviderRow?.value || 'zai'
             
             const openrouterModelRow = await db.setting.findUnique({ where: { id: 'llm.openrouter.model' } })
-            const openrouterModel = openrouterModelRow?.value || 'meta-llama/llama-3.1-8b-instruct:free'
+            const openrouterModel = openrouterModelRow?.value || 'google/gemini-2.5-flash'
 
             const openaiModelRow = await db.setting.findUnique({ where: { id: 'llm.openai.model' } })
             const openaiModel = openaiModelRow?.value || 'gpt-4o-mini'

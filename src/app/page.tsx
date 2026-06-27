@@ -920,7 +920,7 @@ function Settings() {
   const [niche, setNiche] = useState(settings['content.niche'] || 'dog / pet content')
   
   const [provider, setProvider] = useState(settings['llm.provider'] || 'zai')
-  const [openrouterModel, setOpenrouterModel] = useState(settings['llm.openrouter.model'] || 'meta-llama/llama-3.1-8b-instruct:free')
+  const [openrouterModel, setOpenrouterModel] = useState(settings['llm.openrouter.model'] || 'google/gemini-2.5-flash')
   const [openaiModel, setOpenaiModel] = useState(settings['llm.openai.model'] || 'gpt-4o-mini')
   const [geminiModel, setGeminiModel] = useState(settings['llm.gemini.model'] || 'gemini-1.5-flash')
   
@@ -935,7 +935,7 @@ function Settings() {
       setBrandHandle(settings['brand.handle'] || '@yourhandle')
       setNiche(settings['content.niche'] || 'dog / pet content')
       setProvider(settings['llm.provider'] || 'zai')
-      setOpenrouterModel(settings['llm.openrouter.model'] || 'meta-llama/llama-3.1-8b-instruct:free')
+      setOpenrouterModel(settings['llm.openrouter.model'] || 'google/gemini-2.5-flash')
       setOpenaiModel(settings['llm.openai.model'] || 'gpt-4o-mini')
       setGeminiModel(settings['llm.gemini.model'] || 'gemini-1.5-flash')
       setIdeationModel(settings['llm.model.ideation'] || '')
@@ -1016,7 +1016,7 @@ function Settings() {
           <div>
             <label className="text-sm font-medium">Default OpenRouter Model</label>
             <p className="text-xs text-neutral-500 mt-0.5">Type any model ID supported by OpenRouter.</p>
-            <input value={openrouterModel} onChange={e => setOpenrouterModel(e.target.value)} className="w-full mt-2 px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm" placeholder="e.g. meta-llama/llama-3.1-8b-instruct:free" />
+            <input value={openrouterModel} onChange={e => setOpenrouterModel(e.target.value)} className="w-full mt-2 px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm" placeholder="e.g. google/gemini-2.5-flash" />
           </div>
         )}
 
