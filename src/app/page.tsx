@@ -166,8 +166,8 @@ function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
               <p className="text-[10px] text-neutral-500 leading-none mt-1">AI Content Automation</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 flex-1 justify-end max-w-[calc(100vw-200px)]">
-            <nav className="hidden md:flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full py-1 select-none">
+          <div className="flex items-center gap-3 flex-1 justify-end min-w-0">
+            <nav className="hidden md:flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 min-w-0 py-1 select-none justify-end">
               {items.map(item => {
                 const Icon = item.icon
                 const active = tab === item.id
