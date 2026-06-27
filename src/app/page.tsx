@@ -13,10 +13,11 @@ import { Generate } from '@/components/dashboard/generate'
 import { Calendar } from '@/components/dashboard/calendar'
 import { BrandKit } from '@/components/dashboard/brandkit'
 import { Comments, VoiceProfileSettings, Competitors } from '@/components/dashboard/comments-competitors'
+import { Instructions } from '@/components/dashboard/instructions'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar' | 'brandkit' | 'comments' | 'competitors' | 'voice'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar' | 'brandkit' | 'comments' | 'competitors' | 'voice' | 'instructions'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -140,6 +141,7 @@ export default function Home() {
           {tab === 'settings' && <Settings />}
           {tab === 'assets' && <Assets />}
           {tab === 'apikeys' && <ApiKeys />}
+          {tab === 'instructions' && <Instructions />}
         </main>
       </div>
 
@@ -149,7 +151,7 @@ export default function Home() {
   )
 }
 
-import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, Sun, Moon, MessageCircle, Users, Mic, Menu, X } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, Sun, Moon, MessageCircle, Users, Mic, Menu, X, BookOpen } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 function ThemeToggle() {
@@ -204,6 +206,7 @@ function Sidebar({ tab, setTab, className = '', isMobile = false }: { tab: Tab; 
     { id: 'voice', label: 'Voice', icon: Mic },
     { id: 'apikeys', label: 'API Keys', icon: KeyRound },
     { id: 'assets', label: 'Assets', icon: ImageIcon },
+    { id: 'instructions', label: 'Instructions & FAQ', icon: BookOpen },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
   ]
 
