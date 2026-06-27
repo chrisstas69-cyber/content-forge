@@ -74,6 +74,10 @@ export const SECRET_FIELDS: SecretField[] = [
   { id: 'x.client_secret', label: 'Client Secret', platform: 'x', required: true },
   // Replicate (for AI video generation)
   { id: 'replicate.api_token', label: 'API Token', platform: 'replicate', required: false, placeholder: 'r8_xxxxx', helpUrl: 'https://replicate.com/account/api-tokens' },
+  // LLM API Keys
+  { id: 'openai.api_key', label: 'OpenAI API Key', platform: 'llm', required: false, placeholder: 'sk-proj-xxxxx', helpUrl: 'https://platform.openai.com/api-keys' },
+  { id: 'openrouter.api_key', label: 'OpenRouter API Key', platform: 'llm', required: false, placeholder: 'sk-or-v1-xxxxx', helpUrl: 'https://openrouter.ai/keys' },
+  { id: 'gemini.api_key', label: 'Gemini API Key', platform: 'llm', required: false, placeholder: 'AIzaSyxxxxx', helpUrl: 'https://aistudio.google.com/app/apikey' },
 ]
 
 export const PLATFORM_GROUPS: { id: string; label: string; description: string; helpUrl?: string }[] = [
@@ -82,6 +86,7 @@ export const PLATFORM_GROUPS: { id: string; label: string; description: string; 
   { id: 'meta', label: 'Instagram + Facebook', description: 'One Meta app powers both Instagram and Facebook publishing', helpUrl: 'https://developers.facebook.com/apps/' },
   { id: 'x', label: 'X (Twitter)', description: 'Twitter Developer Portal project with OAuth 2.0', helpUrl: 'https://developer.twitter.com/en/portal/dashboard' },
   { id: 'replicate', label: 'Replicate (AI Video Gen)', description: 'Optional — for AI text-to-video B-roll generation. Images use built-in AI (no key needed).', helpUrl: 'https://replicate.com/account/api-tokens' },
+  { id: 'llm', label: 'AI Language Models (LLMs)', description: 'Optional — custom LLM key. If set, text generation, video analysis, and AI replies will run via your account instead of the sandbox SDK.', helpUrl: 'https://platform.openai.com/' },
 ]
 
 // ---- DB-backed secret accessors ----

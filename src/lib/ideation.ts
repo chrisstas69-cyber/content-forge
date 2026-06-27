@@ -1,13 +1,7 @@
 import { db } from '@/lib/db'
-import ZAI from 'z-ai-web-dev-sdk'
+import { getZai } from '@/lib/ai'
 import { getTrends } from '@/lib/trends'
 import { getAnalyticsSummary } from '@/lib/analytics'
-
-let zaiInstance: any = null
-async function getZai() {
-  if (!zaiInstance) zaiInstance = await ZAI.create()
-  return zaiInstance
-}
 
 export interface ContentIdea {
   title: string

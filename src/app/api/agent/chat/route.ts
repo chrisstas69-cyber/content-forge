@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { agentTools, getToolByName, toolSpecs } from '@/lib/agent-tools'
-import ZAI from 'z-ai-web-dev-sdk'
+import { getZai } from '@/lib/ai'
 import { emit } from '@/lib/event-bus'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
-
-let zaiInstance: any = null
-async function getZai() {
-  if (!zaiInstance) zaiInstance = await ZAI.create()
-  return zaiInstance
-}
 
 const SYSTEM_PROMPT = `You are the ContentForge AI Assistant, an intelligent agent living inside a content automation platform.
 

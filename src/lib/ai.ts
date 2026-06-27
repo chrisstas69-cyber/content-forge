@@ -2,12 +2,133 @@ import ZAI from 'z-ai-web-dev-sdk'
 import { promises as fs } from 'fs'
 import { SrtCue } from './ffmpeg'
 import { getTrendsContext } from './trends'
+import { getSecret } from '@/lib/secrets'
 
 let zaiInstance: any = null
 
-async function getZai() {
+export async function getZai() {
   if (!zaiInstance) {
-    zaiInstance = await ZAI.create()
+    const rawZai = await ZAI.create()
+    zaiInstance = {
+      ...rawZai,
+      audio: rawZai.audio,
+      chat: {
+        completions: {
+          create: async (params: { messages: any[]; temperature?: number }) => {
+            const openrouterKey = await getSecret('openrouter.api_key')
+            const openaiKey = await getSecret('openai.api_key')
+            const geminiKey = await getSecret('gemini.api_key')
+            
+            const messages = params.messages
+            const temperature = params.temperature ?? 0.7
+            
+            // 1. OpenRouter
+            if (openrouterKey) {
+              try {
+                const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${openrouterKey}`,
+                    'HTTP-Referer': 'https://contentforge.app',
+                    'X-Title': 'ContentForge'
+                  },
+                  body: JSON.stringify({
+                    model: 'openai/gpt-4o-mini',
+                    messages,
+                    temperature
+                  })
+                })
+                if (res.ok) {
+                  const data = await res.json()
+                  const content = data.choices?.[0]?.message?.content
+                  if (content) {
+                    return {
+                      choices: [{ message: { content } }]
+                    }
+                  }
+                }
+                console.error('OpenRouter completion failed:', await res.text())
+              } catch (err) {
+                console.error('OpenRouter fetch error:', err)
+              }
+            }
+            
+            // 2. OpenAI
+            if (openaiKey) {
+              try {
+                const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${openaiKey}`
+                  },
+                  body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    messages,
+                    temperature
+                  })
+                })
+                if (res.ok) {
+                  const data = await res.json()
+                  const content = data.choices?.[0]?.message?.content
+                  if (content) {
+                    return {
+                      choices: [{ message: { content } }]
+                    }
+                  }
+                }
+                console.error('OpenAI completion failed:', await res.text())
+              } catch (err) {
+                console.error('OpenAI fetch error:', err)
+              }
+            }
+            
+            // 3. Gemini
+            if (geminiKey) {
+              try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    contents: messages.map(m => {
+                      let role = 'user'
+                      if (m.role === 'assistant' || m.role === 'model') {
+                        role = 'model'
+                      }
+                      return {
+                        role,
+                        parts: [{ text: m.content }]
+                      }
+                    }),
+                    generationConfig: {
+                      temperature
+                    }
+                  })
+                })
+                if (res.ok) {
+                  const data = await res.json()
+                  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+                  if (content) {
+                    return {
+                      choices: [{ message: { content } }]
+                    }
+                  }
+                }
+                console.error('Gemini completion failed:', await res.text())
+              } catch (err) {
+                console.error('Gemini fetch error:', err)
+              }
+            }
+            
+            // Fallback to default SDK
+            return rawZai.chat.completions.create(params)
+          }
+        }
+      }
+    }
   }
   return zaiInstance
 }

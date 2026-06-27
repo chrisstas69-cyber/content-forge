@@ -1,11 +1,5 @@
 import { db } from '@/lib/db'
-import ZAI from 'z-ai-web-dev-sdk'
-
-let zaiInstance: any = null
-async function getZai() {
-  if (!zaiInstance) zaiInstance = await ZAI.create()
-  return zaiInstance
-}
+import { getZai } from '@/lib/ai'
 
 export interface HookSuggestion {
   hookText: string

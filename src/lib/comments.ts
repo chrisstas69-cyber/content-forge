@@ -1,12 +1,6 @@
 import { db } from '@/lib/db'
-import ZAI from 'z-ai-web-dev-sdk'
+import { getZai } from '@/lib/ai'
 import { platforms } from '@/lib/social'
-
-let zaiInstance: any = null
-async function getZai() {
-  if (!zaiInstance) zaiInstance = await ZAI.create()
-  return zaiInstance
-}
 
 export interface VoiceProfileData {
   persona?: string

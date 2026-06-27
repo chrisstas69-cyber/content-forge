@@ -1,16 +1,10 @@
-import ZAI from 'z-ai-web-dev-sdk'
+import { getZai } from '@/lib/ai'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { db } from '@/lib/db'
 import { getSecret } from '@/lib/secrets'
 import { getDirs, ensureDirs } from '@/lib/storage'
-
-let zaiInstance: any = null
-async function getZai() {
-  if (!zaiInstance) zaiInstance = await ZAI.create()
-  return zaiInstance
-}
 
 // ---- ZAI Image Generation (built-in, no API key needed) ----
 export async function generateImage(prompt: string, size: string = '1024x1024'): Promise<Buffer> {

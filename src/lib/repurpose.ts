@@ -1,17 +1,11 @@
 import { db } from '@/lib/db'
-import ZAI from 'z-ai-web-dev-sdk'
+import { getZai } from '@/lib/ai'
 import { execFile } from 'child_process'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { getDirs, ensureDirs } from '@/lib/storage'
 import { processVideoPipeline } from '@/lib/pipeline'
-
-let zaiInstance: any = null
-async function getZai() {
-  if (!zaiInstance) zaiInstance = await ZAI.create()
-  return zaiInstance
-}
 
 export interface ClipSuggestion {
   start: number      // seconds
