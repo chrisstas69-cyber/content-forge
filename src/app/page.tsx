@@ -20,6 +20,7 @@ type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const queryClient = useQueryClient()
   const eventSourceRef = useRef<EventSource | null>(null)
 
@@ -66,36 +67,89 @@ export default function Home() {
   }, [queryClient])
 
   return (
-    <div className="min-h-screen flex flex-col bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100">
-      <Header tab={tab} setTab={setTab} />
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        {tab === 'dashboard' && <Dashboard onNavigate={setTab} />}
-        {tab === 'upload' && <Upload />}
-        {tab === 'library' && <Library />}
-        {tab === 'social' && <SocialAccounts onNavigate={setTab} />}
-        {tab === 'scheduled' && <Scheduled />}
-        {tab === 'trends' && <Trends />}
-        {tab === 'analytics' && <Analytics />}
-        {tab === 'ideas' && <Ideas />}
-        {tab === 'insights' && <Insights />}
-        {tab === 'generate' && <Generate />}
-        {tab === 'calendar' && <Calendar />}
-        {tab === 'brandkit' && <BrandKit />}
-        {tab === 'comments' && <Comments />}
-        {tab === 'competitors' && <Competitors />}
-        {tab === 'voice' && <VoiceProfileSettings />}
-        {tab === 'settings' && <Settings />}
-        {tab === 'assets' && <Assets />}
-        {tab === 'apikeys' && <ApiKeys />}
-      </main>
-      <Footer />
+    <div className="min-h-screen flex bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 font-sans">
+      {/* Sidebar - Desktop */}
+      <Sidebar tab={tab} setTab={setTab} className="hidden md:flex" />
+
+      {/* Mobile Sidebar / Drawer */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-neutral-950/60 backdrop-blur-sm transition-opacity duration-300" 
+            onClick={() => setMobileMenuOpen(false)} 
+          />
+          {/* Drawer content */}
+          <div className="relative flex w-full max-w-xs flex-1 flex-col bg-white dark:bg-neutral-900 pt-5 pb-4 shadow-xl">
+            <div className="absolute top-2 right-2">
+              <button 
+                onClick={() => setMobileMenuOpen(false)} 
+                className="p-2 rounded-md text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus:outline-none"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            <Sidebar tab={tab} setTab={(t) => { setTab(t); setMobileMenuOpen(false); }} isMobile />
+          </div>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 md:pl-64">
+        {/* Mobile Top Header */}
+        <header className="flex h-16 items-center justify-between px-4 border-b border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md sticky top-0 z-40 md:hidden">
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setMobileMenuOpen(true)} 
+              className="p-2 -ml-2 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
+            >
+              <Menu className="size-5" />
+            </button>
+            <div className="size-8 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
+              <Sparkles className="size-4.5 text-white" />
+            </div>
+            <span className="font-bold text-sm">ContentForge</span>
+          </div>
+          <ThemeToggle />
+        </header>
+
+        {/* Desktop Top Header */}
+        <header className="hidden md:flex h-16 items-center justify-between px-8 border-b border-neutral-200 dark:border-neutral-800 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm sticky top-0 z-30">
+          <h2 className="text-lg font-semibold capitalize">
+            {tab === 'brandkit' ? 'Brand Kit' : tab === 'apikeys' ? 'API Keys' : tab}
+          </h2>
+          <ThemeToggle />
+        </header>
+
+        <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto">
+          {tab === 'dashboard' && <Dashboard onNavigate={setTab} />}
+          {tab === 'upload' && <Upload />}
+          {tab === 'library' && <Library />}
+          {tab === 'social' && <SocialAccounts onNavigate={setTab} />}
+          {tab === 'scheduled' && <Scheduled />}
+          {tab === 'trends' && <Trends />}
+          {tab === 'analytics' && <Analytics />}
+          {tab === 'ideas' && <Ideas />}
+          {tab === 'insights' && <Insights />}
+          {tab === 'generate' && <Generate />}
+          {tab === 'calendar' && <Calendar />}
+          {tab === 'brandkit' && <BrandKit />}
+          {tab === 'comments' && <Comments />}
+          {tab === 'competitors' && <Competitors />}
+          {tab === 'voice' && <VoiceProfileSettings />}
+          {tab === 'settings' && <Settings />}
+          {tab === 'assets' && <Assets />}
+          {tab === 'apikeys' && <ApiKeys />}
+        </main>
+      </div>
+
       <AgentChat />
       <Toaster richColors position="bottom-right" />
     </div>
   )
 }
 
-import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, Sun, Moon, MessageCircle, Users, Mic } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, Sun, Moon, MessageCircle, Users, Mic, Menu, X } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 function ThemeToggle() {
@@ -117,7 +171,7 @@ function ThemeToggle() {
   return (
     <button
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="relative flex items-center justify-between w-14 h-7 px-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 cursor-pointer transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 shadow-inner"
+      className="relative flex items-center justify-between w-14 h-7 px-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 cursor-pointer transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 shadow-inner shrink-0"
       aria-label="Toggle theme"
     >
       <div
@@ -125,14 +179,13 @@ function ThemeToggle() {
           isDark ? 'translate-x-6' : 'translate-x-0'
         }`}
       />
-      <Sun className="size-3.5 text-amber-500 z-10" />
-      <Moon className="size-3.5 text-neutral-400 dark:text-amber-400 z-10" />
+      <Sun className="size-3.5 text-amber-500 z-10 animate-fade-in" />
+      <Moon className="size-3.5 text-neutral-400 dark:text-amber-400 z-10 animate-fade-in" />
     </button>
   )
 }
 
-
-function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+function Sidebar({ tab, setTab, className = '', isMobile = false }: { tab: Tab; setTab: (t: Tab) => void; className?: string; isMobile?: boolean }) {
   const items: { id: Tab; label: string; icon: any }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'upload', label: 'Upload', icon: UploadCloud },
@@ -153,64 +206,54 @@ function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     { id: 'assets', label: 'Assets', icon: ImageIcon },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
   ]
+
   return (
-    <header className="sticky top-0 z-40 border-b border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="size-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center shadow-sm">
-              <Sparkles className="size-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-base font-bold leading-none">ContentForge</h1>
-              <p className="text-[10px] text-neutral-500 leading-none mt-1">AI Content Automation</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 flex-1 justify-end min-w-0">
-            <nav className="hidden md:flex items-center gap-1 overflow-x-auto no-scrollbar flex-1 min-w-0 py-1 select-none justify-end">
-              {items.map(item => {
-                const Icon = item.icon
-                const active = tab === item.id
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setTab(item.id)}
-                    className={`inline-flex items-center gap-2 px-3 h-9 rounded-lg text-sm font-medium transition-colors shrink-0 ${
-                      active ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                    }`}
-                  >
-                    <Icon className="size-4" />
-                    {item.label}
-                  </button>
-                )
-              })}
-            </nav>
-            {/* Mobile dropdown */}
-            <select
-              className="md:hidden px-3 h-9 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-sm"
-              value={tab}
-              onChange={e => setTab(e.target.value as Tab)}
-            >
-              {items.map(item => (
-                <option key={item.id} value={item.id}>{item.label}</option>
-              ))}
-            </select>
-            <ThemeToggle />
-          </div>
+    <div
+      className={`flex flex-col bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 ${
+        isMobile ? 'h-full w-full' : 'fixed inset-y-0 left-0 w-64'
+      } ${className}`}
+    >
+      {/* Brand Header */}
+      <div className="flex h-16 shrink-0 items-center gap-2 px-6 border-b border-neutral-200 dark:border-neutral-800">
+        <div className="size-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center shadow-sm">
+          <Sparkles className="size-5 text-white" />
+        </div>
+        <div>
+          <h1 className="text-sm font-bold leading-none">ContentForge</h1>
+          <p className="text-[10px] text-neutral-500 leading-none mt-1">AI Content Automation</p>
         </div>
       </div>
-    </header>
-  )
-}
 
-function Footer() {
-  return (
-    <footer className="mt-auto border-t border-neutral-200 dark:border-neutral-800 py-4">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-neutral-500">
-        <span>ContentForge · AI Content Automation · Self-hosted</span>
-        <span>Upload → Edit → Score → Publish · with AI Agent</span>
+      {/* Nav links */}
+      <nav className="flex-1 space-y-0.5 px-3 py-4 overflow-y-auto no-scrollbar">
+        {items.map(item => {
+          const Icon = item.icon
+          const active = tab === item.id
+          return (
+            <button
+              key={item.id}
+              onClick={() => setTab(item.id)}
+              className={`w-full flex items-center gap-3 px-3 h-10 rounded-lg text-sm font-medium transition-colors ${
+                active
+                  ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-sm'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-955 dark:hover:text-white'
+              }`}
+            >
+              <Icon className="size-4 shrink-0" />
+              <span>{item.label}</span>
+            </button>
+          )
+        })}
+      </nav>
+
+      {/* Footer Info */}
+      <div className="p-4 border-t border-neutral-200 dark:border-neutral-800 shrink-0">
+        <div className="text-[10px] text-neutral-400 dark:text-neutral-500 text-center leading-relaxed">
+          <div>ContentForge v3 · Self-hosted</div>
+          <div className="mt-0.5 text-neutral-300 dark:text-neutral-600">Upload → Score → Publish</div>
+        </div>
       </div>
-    </footer>
+    </div>
   )
 }
 
