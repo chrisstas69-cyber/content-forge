@@ -112,7 +112,16 @@ export default function Home() {
             </div>
             <span className="font-bold text-sm">ContentForge</span>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-3">
+            <a
+              href="/api/download?file=ContentForge-Complete-Guide-v2.docx"
+              className="flex items-center justify-center size-8 rounded-full bg-orange-500 hover:bg-orange-600 text-white transition-colors shadow-sm cursor-pointer"
+              title="Download the Complete scripts & instructions guide"
+            >
+              <Download className="size-4" />
+            </a>
+            <ThemeToggle />
+          </div>
         </header>
 
         {/* Desktop Top Header */}
@@ -120,7 +129,17 @@ export default function Home() {
           <h2 className="text-lg font-semibold capitalize">
             {tab === 'brandkit' ? 'Brand Kit' : tab === 'apikeys' ? 'API Keys' : tab === 'analyzer' ? 'Viral Script Analyzer' : tab === 'frameworks' ? 'Framework Library' : tab}
           </h2>
-          <ThemeToggle />
+          <div className="flex items-center gap-4">
+            <a
+              href="/api/download?file=ContentForge-Complete-Guide-v2.docx"
+              className="inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white transition-colors shadow-sm cursor-pointer"
+              title="Download the Complete scripts & instructions guide"
+            >
+              <Download className="size-3.5" />
+              <span>Download Guide</span>
+            </a>
+            <ThemeToggle />
+          </div>
         </header>
 
         <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto">
@@ -154,7 +173,7 @@ export default function Home() {
   )
 }
 
-import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, Sun, Moon, MessageCircle, Users, Mic, Menu, X, BookOpen, Loader2, Search, Layers } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, Sun, Moon, MessageCircle, Users, Mic, Menu, X, BookOpen, Loader2, Search, Layers, Download } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 function ThemeToggle() {
