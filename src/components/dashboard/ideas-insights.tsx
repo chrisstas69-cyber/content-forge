@@ -8,6 +8,7 @@ import { useState } from 'react'
 export function Ideas() {
   const queryClient = useQueryClient()
   const [generating, setGenerating] = useState(false)
+  const [implementingId, setImplementingId] = useState<string | null>(null)
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['ideas'],
@@ -33,6 +34,39 @@ export function Ideas() {
     }
   }
 
+  async function saveIdea(id: string) {
+    try {
+      const res = await fetch(`/api/ideas/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'saved' }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success('Idea saved for later!')
+      refetch()
+    } catch {
+      toast.error('Failed to save idea')
+    }
+  }
+
+  async function implementIdea(id: string) {
+    setImplementingId(id)
+    try {
+      const res = await fetch(`/api/ideas/${id}/implement`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to implement idea')
+      toast.success('Draft video project created in Library!')
+      queryClient.invalidateQueries({ queryKey: ['ideas'] })
+      queryClient.invalidateQueries({ queryKey: ['videos'] })
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setImplementingId(null)
+    }
+  }
+
   async function rejectIdea(id: string) {
     await fetch(`/api/ideas/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'rejected' }), headers: { 'Content-Type': 'application/json' } })
     refetch()
@@ -45,6 +79,7 @@ export function Ideas() {
 
   const ideas: any[] = data?.ideas || []
   const newIdeas = ideas.filter(i => i.status === 'new')
+  const savedIdeas = ideas.filter(i => i.status === 'saved')
   const usedIdeas = ideas.filter(i => i.status === 'used')
   const rejectedIdeas = ideas.filter(i => i.status === 'rejected')
 
@@ -75,7 +110,7 @@ export function Ideas() {
 
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-neutral-400" /></div>
-      ) : newIdeas.length === 0 && usedIdeas.length === 0 ? (
+      ) : newIdeas.length === 0 && savedIdeas.length === 0 && usedIdeas.length === 0 ? (
         <div className="text-center py-16 bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800">
           <Lightbulb className="size-12 mx-auto text-neutral-300 mb-3" />
           <h3 className="font-semibold">No ideas yet</h3>
@@ -90,7 +125,7 @@ export function Ideas() {
                 {newIdeas.map(idea => {
                   const Icon = sourceIcons[idea.source] || Lightbulb
                   return (
-                    <div key={idea.id} className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+                    <div key={idea.id} className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-3 mb-2">
                         <div className="flex items-center gap-2">
                           <div className="size-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300 flex items-center justify-center">
@@ -115,8 +150,77 @@ export function Ideas() {
                           <p className="text-xs text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap">{idea.scriptOutline}</p>
                         </div>
                       )}
-                      <div className="flex gap-2 mt-3">
-                        <button onClick={() => deleteIdea(idea.id)} className="text-xs text-red-600 hover:underline">Dismiss</button>
+                      <div className="flex items-center justify-between mt-4 pt-3 border-t border-neutral-100 dark:border-neutral-800">
+                        <button onClick={() => deleteIdea(idea.id)} className="text-xs text-neutral-400 hover:text-red-500 transition-colors">Dismiss</button>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => saveIdea(idea.id)} 
+                            className="px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+                          >
+                            Save for Later
+                          </button>
+                          <button 
+                            onClick={() => implementIdea(idea.id)} 
+                            disabled={implementingId === idea.id}
+                            className="px-3 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-semibold hover:bg-orange-600 disabled:opacity-50 transition-colors inline-flex items-center gap-1"
+                          >
+                            {implementingId === idea.id && <Loader2 className="size-3 animate-spin" />}
+                            Implement Now
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {savedIdeas.length > 0 && (
+            <div>
+              <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                <span className="size-2 rounded-full bg-emerald-500"></span>
+                Saved Ideas ({savedIdeas.length})
+              </h3>
+              <div className="space-y-3">
+                {savedIdeas.map(idea => {
+                  const Icon = sourceIcons[idea.source] || Lightbulb
+                  return (
+                    <div key={idea.id} className="bg-emerald-50/10 dark:bg-emerald-950/5 rounded-xl border border-emerald-200/50 dark:border-emerald-800/30 p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="size-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 flex items-center justify-center">
+                            <Icon className="size-4" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-sm">{idea.title}</h4>
+                            <p className="text-[10px] text-neutral-500 capitalize">{idea.source} · {idea.format}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-emerald-600">
+                            {idea.predictedViralScore}
+                          </div>
+                          <p className="text-[10px] text-neutral-500">viral score</p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-2">{idea.concept}</p>
+                      {idea.scriptOutline && (
+                        <div className="mt-2 p-3 bg-neutral-50 dark:bg-neutral-950 rounded-lg">
+                          <p className="text-[10px] font-semibold text-neutral-500 uppercase mb-1">Script outline</p>
+                          <p className="text-xs text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap">{idea.scriptOutline}</p>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between mt-4 pt-3 border-t border-neutral-100 dark:border-neutral-800">
+                        <button onClick={() => deleteIdea(idea.id)} className="text-xs text-neutral-400 hover:text-red-500 transition-colors">Dismiss</button>
+                        <button 
+                          onClick={() => implementIdea(idea.id)} 
+                          disabled={implementingId === idea.id}
+                          className="px-3 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-semibold hover:bg-orange-600 disabled:opacity-50 transition-colors inline-flex items-center gap-1"
+                        >
+                          {implementingId === idea.id && <Loader2 className="size-3 animate-spin" />}
+                          Implement Now
+                        </button>
                       </div>
                     </div>
                   )

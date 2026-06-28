@@ -151,7 +151,7 @@ export default function Home() {
   )
 }
 
-import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, Sun, Moon, MessageCircle, Users, Mic, Menu, X, BookOpen } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, Sun, Moon, MessageCircle, Users, Mic, Menu, X, BookOpen, Loader2 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 function ThemeToggle() {
@@ -292,8 +292,12 @@ function VideoCard({ v }: { v: any }) {
   const [open, setOpen] = useState(false)
   const [translateOpen, setTranslateOpen] = useState(false)
   const [repurposing, setRepurposing] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
+
   const statuses: Record<string, string> = {
+    draft: 'bg-neutral-100 text-neutral-500 border border-dashed border-neutral-300 dark:border-neutral-700',
     pending: 'bg-neutral-100 text-neutral-700',
     editing: 'bg-blue-100 text-blue-700',
     transcribing: 'bg-blue-100 text-blue-700',
@@ -327,49 +331,112 @@ function VideoCard({ v }: { v: any }) {
     }
   }
 
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('video', file)
+      const res = await fetch(`/api/videos/${v.id}`, { method: 'PATCH', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to upload')
+      toast.success('Video uploaded successfully! Processing started.')
+      queryClient.invalidateQueries({ queryKey: ['videos'] })
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-      <div className="aspect-video bg-neutral-100 dark:bg-neutral-800 relative">
-        {v.thumbnailUrl ? (
-          <img src={v.thumbnailUrl} alt={v.filename} className="size-full object-cover" />
-        ) : (
-          <div className="size-full flex items-center justify-center text-neutral-300"><Film className="size-8" /></div>
-        )}
-        {v.viralScore != null && (
-          <div className={`absolute top-2 right-2 size-10 rounded-full ${scoreColor} flex items-center justify-center text-sm font-bold`}>
-            {v.viralScore}
-          </div>
-        )}
-        <div className="absolute top-2 left-2 flex gap-1">
-          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statuses[v.status] || 'bg-neutral-100'}`}>
-            {v.status}
-          </span>
-          {v.isClip && (
-            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-              Clip
+    <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full">
+      <div>
+        <div className="aspect-video bg-neutral-100 dark:bg-neutral-800 relative">
+          {v.status === 'draft' ? (
+            <div className="size-full flex flex-col items-center justify-center p-4">
+              {uploading ? (
+                <div className="flex flex-col items-center justify-center text-neutral-500">
+                  <Loader2 className="size-8 animate-spin text-orange-500 mb-2" />
+                  <p className="text-xs">Uploading video file…</p>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center gap-1.5 text-neutral-500 hover:text-orange-500 transition-colors group cursor-pointer"
+                >
+                  <div className="size-10 rounded-full bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center group-hover:bg-orange-50 dark:group-hover:bg-orange-950/20 transition-colors shadow-sm border border-neutral-200 dark:border-neutral-800">
+                    <UploadCloud className="size-5 text-neutral-400 group-hover:text-orange-500 transition-colors" />
+                  </div>
+                  <span className="text-[11px] font-semibold">Upload Video File</span>
+                </button>
+              )}
+              <input type="file" ref={fileInputRef} onChange={handleUpload} accept="video/*" className="hidden" />
+            </div>
+          ) : v.thumbnailUrl ? (
+            <img src={v.thumbnailUrl} alt={v.filename} className="size-full object-cover" />
+          ) : (
+            <div className="size-full flex items-center justify-center text-neutral-300"><Film className="size-8" /></div>
+          )}
+          {v.viralScore != null && (
+            <div className={`absolute top-2 right-2 size-10 rounded-full ${scoreColor} flex items-center justify-center text-sm font-bold`}>
+              {v.viralScore}
+            </div>
+          )}
+          <div className="absolute top-2 left-2 flex gap-1">
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide uppercase ${statuses[v.status] || 'bg-neutral-100'}`}>
+              {v.status}
             </span>
+            {v.isClip && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide uppercase bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                Clip
+              </span>
+            )}
+          </div>
+          {(v.status === 'editing' || v.status === 'transcribing' || v.status === 'scoring') && (
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-neutral-200">
+              <div className="h-full bg-blue-500 transition-all" style={{ width: `${v.progress}%` }} />
+            </div>
           )}
         </div>
-        {(v.status === 'editing' || v.status === 'transcribing' || v.status === 'scoring') && (
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-neutral-200">
-            <div className="h-full bg-blue-500 transition-all" style={{ width: `${v.progress}%` }} />
-          </div>
-        )}
+        <div className="p-3">
+          <h3 className="font-semibold text-sm text-neutral-800 dark:text-neutral-200 truncate">{v.aiTitle || v.filename}</h3>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            {v.status === 'draft' ? (
+              <span className="text-orange-500 font-medium">Idea Implementation Draft</span>
+            ) : (
+              <>
+                {v.durationSec ? `${Math.floor(v.durationSec)}s` : '—'} · {(v.sizeBytes / 1024 / 1024).toFixed(1)} MB
+                {v.isClip && v.clipStart != null && ` · from ${Math.floor(v.clipStart)}s`}
+              </>
+            )}
+          </p>
+          
+          {v.aiDescription && v.status === 'draft' && (
+            <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-2 line-clamp-2 leading-relaxed bg-neutral-50 dark:bg-neutral-950 p-2 rounded-lg border border-neutral-100 dark:border-neutral-900">{v.aiDescription}</p>
+          )}
+
+          {v.aiHashtags?.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {v.aiHashtags.slice(0, 4).map((h: string) => (
+                <span key={h} className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">#{h}</span>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-      <div className="p-3">
-        <h3 className="font-medium text-sm truncate">{v.aiTitle || v.filename}</h3>
-        <p className="text-xs text-neutral-500 mt-0.5">
-          {v.durationSec ? `${Math.floor(v.durationSec)}s` : '—'} · {(v.sizeBytes / 1024 / 1024).toFixed(1)} MB
-          {v.isClip && v.clipStart != null && ` · from ${Math.floor(v.clipStart)}s`}
-        </p>
-        {v.aiHashtags?.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {v.aiHashtags.slice(0, 4).map((h: string) => (
-              <span key={h} className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">#{h}</span>
-            ))}
-          </div>
-        )}
-        <div className="flex flex-wrap gap-2 mt-3">
+      <div className="p-3 pt-0">
+        <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-neutral-100 dark:border-neutral-800">
+          {v.status === 'draft' && (
+            <button 
+              onClick={() => fileInputRef.current?.click()} 
+              disabled={uploading}
+              className="flex-1 px-3 py-1.5 text-xs font-semibold rounded-md bg-orange-500 hover:bg-orange-600 text-white transition-colors disabled:opacity-50"
+            >
+              Upload Video
+            </button>
+          )}
           {v.status === 'ready' && (
             <button onClick={() => setOpen(true)} className="flex-1 px-3 py-1.5 text-xs font-medium rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900">
               Publish
