@@ -12,10 +12,12 @@ import { Ideas, Insights } from '@/components/dashboard/ideas-insights'
 import { Generate } from '@/components/dashboard/generate'
 import { Calendar } from '@/components/dashboard/calendar'
 import { BrandKit } from '@/components/dashboard/brandkit'
+import { Comments, VoiceProfileSettings, Competitors } from '@/components/dashboard/comments-competitors'
+import { ScriptAnalyzer, FrameworkLibrary } from '@/components/dashboard/script-analyzer'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar' | 'brandkit'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar' | 'brandkit' | 'comments' | 'competitors' | 'voice' | 'analyzer' | 'frameworks'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -80,6 +82,9 @@ export default function Home() {
         {tab === 'generate' && <Generate />}
         {tab === 'calendar' && <Calendar />}
         {tab === 'brandkit' && <BrandKit />}
+        {tab === 'voice' && <VoiceProfileSettings />}
+        {tab === 'analyzer' && <ScriptAnalyzer />}
+        {tab === 'frameworks' && <FrameworkLibrary />}
         {tab === 'settings' && <Settings />}
         {tab === 'assets' && <Assets />}
         {tab === 'apikeys' && <ApiKeys />}
@@ -91,7 +96,7 @@ export default function Home() {
   )
 }
 
-import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, MessageCircle, Users, Mic, Search, Layers } from 'lucide-react'
 
 function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const items: { id: Tab; label: string; icon: any }[] = [
@@ -100,13 +105,18 @@ function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     { id: 'library', label: 'Library', icon: Film },
     { id: 'ideas', label: 'Ideas', icon: Lightbulb },
     { id: 'generate', label: 'Generate', icon: Wand2 },
+    { id: 'analyzer', label: 'Analyzer', icon: Search },
+    { id: 'frameworks', label: 'Frameworks', icon: Layers },
     { id: 'social', label: 'Social', icon: Share2 },
     { id: 'scheduled', label: 'Scheduled', icon: CalendarClock },
     { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
     { id: 'trends', label: 'Trends', icon: TrendingUp },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'insights', label: 'Insights', icon: Target },
+    { id: 'comments', label: 'Comments', icon: MessageCircle },
+    { id: 'competitors', label: 'Competitors', icon: Users },
     { id: 'brandkit', label: 'Brand Kit', icon: Palette },
+    { id: 'voice', label: 'Voice', icon: Mic },
     { id: 'apikeys', label: 'API Keys', icon: KeyRound },
     { id: 'assets', label: 'Assets', icon: ImageIcon },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },

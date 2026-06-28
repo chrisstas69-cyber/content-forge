@@ -563,6 +563,127 @@ export const agentTools: AgentTool[] = [
       }
     },
   },
+  // ---- NEW: Script Analyzer tools ----
+  {
+    name: 'analyze_video_url',
+    description: 'Analyze any viral video URL — reverse-engineer the script (hook, pattern interrupt, body, CTA), psychology triggers, and framework. Works with YouTube, TikTok, Instagram URLs.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The video URL to analyze' },
+        adaptForNiche: { type: 'boolean', description: 'If true, also generate an adapted version for the user\'s niche' },
+      },
+      required: ['url'],
+    },
+    handler: async (args) => {
+      const { analyzeScript } = await import('@/lib/script-analysis')
+      try {
+        const result = await analyzeScript(args.url, { adaptForNiche: args.adaptForNiche })
+        return {
+          ok: true,
+          title: result.title,
+          viralScore: result.analysis.viralScore,
+          hook: result.analysis.hookText,
+          psychologyTriggers: result.analysis.psychologyTriggers,
+          framework: result.analysis.framework?.name,
+          adaptedScript: result.analysis.adaptedScript ? result.analysis.adaptedScript.slice(0, 500) + '...' : null,
+        }
+      } catch (err: any) {
+        return { error: err?.message || 'Analysis failed' }
+      }
+    },
+  },
+  {
+    name: 'bulk_analyze_videos',
+    description: 'Analyze multiple viral video URLs at once (up to 20). Returns results sorted by viral score.',
+    parameters: {
+      type: 'object',
+      properties: {
+        urls: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of video URLs (max 20)',
+        },
+      },
+      required: ['urls'],
+    },
+    handler: async (args) => {
+      const { bulkAnalyze } = await import('@/lib/script-analysis')
+      try {
+        const result = await bulkAnalyze(args.urls.slice(0, 20))
+        return {
+          ok: true,
+          analyzed: result.analyzed,
+          topResults: result.results.slice(0, 5).map((r: any) => ({
+            url: r.url,
+            title: r.title,
+            viralScore: r.viralScore,
+            framework: r.framework,
+          })),
+        }
+      } catch (err: any) {
+        return { error: err?.message || 'Bulk analysis failed' }
+      }
+    },
+  },
+  {
+    name: 'list_analyzed_scripts',
+    description: 'List previously analyzed viral video scripts.',
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      const scripts = await db.analyzedScript.findMany({ orderBy: { createdAt: 'desc' }, take: 10 })
+      return {
+        count: scripts.length,
+        scripts: scripts.map(s => ({
+          id: s.id,
+          url: s.url,
+          platform: s.platform,
+          title: s.title,
+          viralScore: s.viralScore,
+          framework: s.framework ? JSON.parse(s.framework)?.name : null,
+        })),
+      }
+    },
+  },
+  {
+    name: 'list_frameworks',
+    description: 'List saved reusable framework templates extracted from viral videos.',
+    parameters: { type: 'object', properties: {} },
+    handler: async () => {
+      const frameworks = await db.framework.findMany({ orderBy: { useCount: 'desc' }, take: 10 })
+      return {
+        count: frameworks.length,
+        frameworks: frameworks.map(f => ({
+          id: f.id,
+          name: f.name,
+          steps: f.steps ? JSON.parse(f.steps) : [],
+          useCount: f.useCount,
+        })),
+      }
+    },
+  },
+  {
+    name: 'adapt_script_for_niche',
+    description: 'Take a previously analyzed viral video and adapt its script for the user\'s niche.',
+    parameters: {
+      type: 'object',
+      properties: {
+        analysisId: { type: 'string', description: 'The ID of the analyzed script to adapt' },
+      },
+      required: ['analysisId'],
+    },
+    handler: async (args) => {
+      const { adaptScriptForNiche } = await import('@/lib/script-analysis')
+      const nicheSetting = await db.setting.findUnique({ where: { id: 'content.niche' } })
+      const handleSetting = await db.setting.findUnique({ where: { id: 'brand.handle' } })
+      try {
+        const adapted = await adaptScriptForNiche(args.analysisId, nicheSetting?.value || 'pet content', handleSetting?.value || '@yourhandle')
+        return { ok: true, adaptedScript: adapted.slice(0, 800) }
+      } catch (err: any) {
+        return { error: err?.message || 'Adaptation failed' }
+      }
+    },
+  },
 ]
 
 export function getToolByName(name: string): AgentTool | undefined {
