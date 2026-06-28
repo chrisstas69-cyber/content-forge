@@ -14,10 +14,11 @@ import { Calendar } from '@/components/dashboard/calendar'
 import { BrandKit } from '@/components/dashboard/brandkit'
 import { Comments, VoiceProfileSettings, Competitors } from '@/components/dashboard/comments-competitors'
 import { Instructions } from '@/components/dashboard/instructions'
+import { ScriptAnalyzer, FrameworkLibrary } from '@/components/dashboard/script-analyzer'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 
-type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar' | 'brandkit' | 'comments' | 'competitors' | 'voice' | 'instructions'
+type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar' | 'brandkit' | 'comments' | 'competitors' | 'voice' | 'instructions' | 'analyzer' | 'frameworks'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -117,7 +118,7 @@ export default function Home() {
         {/* Desktop Top Header */}
         <header className="hidden md:flex h-16 items-center justify-between px-8 border-b border-neutral-200 dark:border-neutral-800 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm sticky top-0 z-30">
           <h2 className="text-lg font-semibold capitalize">
-            {tab === 'brandkit' ? 'Brand Kit' : tab === 'apikeys' ? 'API Keys' : tab}
+            {tab === 'brandkit' ? 'Brand Kit' : tab === 'apikeys' ? 'API Keys' : tab === 'analyzer' ? 'Viral Script Analyzer' : tab === 'frameworks' ? 'Framework Library' : tab}
           </h2>
           <ThemeToggle />
         </header>
@@ -138,6 +139,8 @@ export default function Home() {
           {tab === 'comments' && <Comments />}
           {tab === 'competitors' && <Competitors />}
           {tab === 'voice' && <VoiceProfileSettings />}
+          {tab === 'analyzer' && <ScriptAnalyzer />}
+          {tab === 'frameworks' && <FrameworkLibrary />}
           {tab === 'settings' && <Settings />}
           {tab === 'assets' && <Assets />}
           {tab === 'apikeys' && <ApiKeys />}
@@ -151,7 +154,7 @@ export default function Home() {
   )
 }
 
-import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, Sun, Moon, MessageCircle, Users, Mic, Menu, X, BookOpen, Loader2 } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, Sun, Moon, MessageCircle, Users, Mic, Menu, X, BookOpen, Loader2, Search, Layers } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 function ThemeToggle() {
@@ -194,6 +197,8 @@ function Sidebar({ tab, setTab, className = '', isMobile = false }: { tab: Tab; 
     { id: 'library', label: 'Library', icon: Film },
     { id: 'ideas', label: 'Ideas', icon: Lightbulb },
     { id: 'generate', label: 'Generate', icon: Wand2 },
+    { id: 'analyzer', label: 'Analyzer', icon: Search },
+    { id: 'frameworks', label: 'Frameworks', icon: Layers },
     { id: 'social', label: 'Social', icon: Share2 },
     { id: 'scheduled', label: 'Scheduled', icon: CalendarClock },
     { id: 'calendar', label: 'Calendar', icon: CalendarIcon },

@@ -338,3 +338,41 @@ model CompetitorPost {
   @@unique([competitorId, platformPostId])
   @@index([alertSent])
 }
+
+/// Analyzed viral scripts — reverse-engineered from any video URL
+model AnalyzedScript {
+  id              String   @id @default(cuid())
+  url             String   // original video URL
+  platform        String   // youtube | tiktok | instagram
+  title           String?
+  thumbnailUrl    String?
+  hookText        String?  // 0-3 second opening text
+  patternInterrupt String? // what breaks the scroll
+  bodyText        String?  // main content
+  ctaText         String?  // call to action
+  fullScript      String?  // complete transcript
+  psychologyTriggers String? // JSON: ["urgency", "scarcity", "social_proof", ...]
+  framework       String?  // JSON: { steps: ["hook", "agitation", "solution", "proof", "cta"] }
+  viralScore      Int?     // 0-100
+  analysisNotes   String?  // AI's explanation of why it works
+  adaptedScript   String?  // user's adapted version for their niche
+  sourceType      String   @default("single") // single | bulk | auto
+  createdAt       DateTime @default(now())
+  @@index([platform, createdAt])
+  @@index([viralScore])
+}
+
+/// Reusable framework templates extracted from viral videos
+model Framework {
+  id           String   @id @default(cuid())
+  name         String   // e.g. "Problem-Agitation-Solution-Proof-CTA"
+  description  String
+  steps        String   // JSON: ["Hook (0-3s)", "Pattern Interrupt", "Body", "CTA"]
+  psychologyTriggers String?
+  exampleScript String?
+  sourceUrl    String?
+  niche        String?
+  useCount     Int      @default(0)
+  createdAt    DateTime @default(now())
+  @@index([niche])
+}
