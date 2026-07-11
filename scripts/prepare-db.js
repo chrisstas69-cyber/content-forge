@@ -5,6 +5,10 @@ const { execSync } = require('child_process');
 const schemaPath = path.join(__dirname, '../prisma/schema.prisma');
 
 if (process.env.VERCEL === '1') {
+  if (!process.env.DATABASE_URL) {
+    console.log('No DATABASE_URL configured. Skipping legacy Prisma database sync for this preview deployment.');
+    process.exit(0);
+  }
   console.log('Detected Vercel environment. Preparing database for PostgreSQL...');
   
   let schema = fs.readFileSync(schemaPath, 'utf8');
