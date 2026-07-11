@@ -41,9 +41,21 @@ Wait 2–3 minutes for the build to complete. You'll get a URL like `dog-content
 
 ## Step 3: Set Environment Variables on Vercel
 
-You need TWO environment variables on Vercel:
+You need four environment variables on Vercel. The app intentionally returns a
+503 in production until private access is configured.
 
-### 1. `ENCRYPTION_KEY` — encrypts your API keys at rest
+### 1. `CONTENTFORGE_USERNAME` and `CONTENTFORGE_PASSWORD` — private workspace access
+
+Choose a private username and generate a long password:
+
+```bash
+openssl rand -base64 32
+```
+
+Add both variables for Production and Preview. Your browser will show a native
+sign-in prompt before any page or API response is accessible.
+
+### 2. `ENCRYPTION_KEY` — encrypts your API keys at rest
 
 1. Open your terminal and generate a random 32-byte key:
    ```bash
@@ -58,7 +70,7 @@ You need TWO environment variables on Vercel:
    - **Value**: (paste the key you generated)
    - **Environment**: select all (Production, Preview, Development)
 
-### 2. `CRON_SECRET` — protects the scheduled-publishing cron endpoint
+### 3. `CRON_SECRET` — protects the scheduled-publishing cron endpoint
 
 1. Generate another random string:
    ```bash
@@ -206,8 +218,10 @@ Or use a `vercel.json` build config.
 
 ## Security Notes
 
+- Every page and API route is protected by the private workspace access gate
 - All API secrets are encrypted with AES-256-GCM before being stored in the database
-- The encryption key (`ENCRYPTION_KEY`) is the only env var you need on Vercel
 - **Keep your `ENCRYPTION_KEY` safe** — if you lose it, all stored secrets become undecryptable
+- Stored secret values and recognizable previews are never returned to the browser
 - OAuth tokens for connected accounts are stored in the database (also encrypted at rest if you enable transparent disk encryption on your DB host)
-- The app has no user authentication — anyone with the URL can access it. Add NextAuth.js login if you want to restrict access.
+- This Basic access gate is appropriate for the current single-owner private version. Replace it with account-based authentication and per-workspace authorization before selling the product to multiple customers.
+- Never commit `.env`. If a credential was ever committed, removing the file is not enough: revoke the credential, rotate it, and purge the file from Git history before making the repository public again.

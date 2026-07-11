@@ -42,12 +42,6 @@ export function decrypt(payload: string): string {
   return dec.toString('utf8')
 }
 
-export function mask(value: string): string {
-  if (!value) return ''
-  if (value.length <= 8) return '•'.repeat(value.length)
-  return value.slice(0, 4) + '•'.repeat(Math.max(4, value.length - 8)) + value.slice(-4)
-}
-
 // ---- Secret schema definitions ----
 // Each platform has a set of required credentials.
 export interface SecretField {
@@ -123,7 +117,7 @@ export async function deleteSecret(id: string): Promise<void> {
   await db.appSecret.delete({ where: { id } }).catch(() => {})
 }
 
-export async function listSecrets(): Promise<{ id: string; label: string; platform: string; hasValue: boolean; preview: string; updatedAt: Date }[]> {
+export async function listSecrets(): Promise<{ id: string; label: string; platform: string; hasValue: boolean; updatedAt: Date }[]> {
   const rows = await db.appSecret.findMany()
   return rows.map(r => {
     let value = ''
@@ -133,7 +127,6 @@ export async function listSecrets(): Promise<{ id: string; label: string; platfo
       label: r.label,
       platform: r.platform,
       hasValue: !!value,
-      preview: mask(value),
       updatedAt: r.updatedAt,
     }
   })

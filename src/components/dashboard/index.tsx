@@ -1,14 +1,20 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { Film, Loader2, TrendingUp, CheckCircle2, XCircle, Clock, Share2, CalendarClock, Layers, Sparkles } from 'lucide-react'
+import { Film, TrendingUp, CheckCircle2, Clock, Share2, CalendarClock, RefreshCw } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 type Tab = 'dashboard' | 'upload' | 'library' | 'social' | 'settings' | 'assets' | 'apikeys' | 'scheduled' | 'trends' | 'analytics' | 'ideas' | 'insights' | 'generate' | 'calendar' | 'brandkit' | 'comments' | 'competitors' | 'voice'
 
 export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['stats'],
-    queryFn: async () => (await fetch('/api/dashboard/stats')).json(),
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/stats')
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Dashboard data could not be loaded')
+      return data
+    },
     refetchInterval: 5000,
   })
   const { data: settingsData } = useQuery({
@@ -18,7 +24,28 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   const niche = settingsData?.settings?.['content.niche'] || 'your niche'
 
   if (isLoading) {
-    return <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-neutral-400" /></div>
+    return (
+      <div className="space-y-6" role="status" aria-label="Loading your workspace">
+        <div className="space-y-2"><Skeleton className="h-7 w-48" /><Skeleton className="h-4 w-full max-w-2xl" /></div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-28 rounded-xl" />)}
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2"><Skeleton className="h-80 rounded-xl" /><Skeleton className="h-80 rounded-xl" /></div>
+        <p className="text-center text-sm text-neutral-500">Loading your private workspace…</p>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="mx-auto max-w-lg rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-900 dark:bg-red-950/30">
+        <h2 className="font-semibold text-red-900 dark:text-red-100">Your dashboard could not be loaded</h2>
+        <p className="mt-2 text-sm text-red-700 dark:text-red-300">{error instanceof Error ? error.message : 'Check the database connection and try again.'}</p>
+        <button onClick={() => refetch()} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800">
+          <RefreshCw className="size-4" /> Retry
+        </button>
+      </div>
+    )
   }
 
   const s = stats || {}
@@ -34,7 +61,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold">Welcome back 👋</h2>
+        <h2 className="text-xl font-bold">Your content workspace</h2>
         <p className="text-sm text-neutral-500">Your AI-powered content automation hub for <strong>{niche}</strong>. Upload videos, let the system edit and score them, then publish to all platforms — or just ask the AI agent.</p>
       </div>
 

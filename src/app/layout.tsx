@@ -27,18 +27,8 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "ContentForge",
   },
-  openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-  },
+  robots: { index: false, follow: false, noarchive: true },
+  referrer: 'strict-origin-when-cross-origin',
 };
 
 export default function RootLayout({

@@ -12,6 +12,8 @@ export function Generate() {
   const [title, setTitle] = useState('')
   const [videoId, setVideoId] = useState('')
   const [generating, setGenerating] = useState(false)
+  const [generationError, setGenerationError] = useState('')
+  const [generationMessage, setGenerationMessage] = useState('')
   // NEW: image upload state for img2img thumbnails
   const [uploadedImage, setUploadedImage] = useState<File | null>(null)
   const [uploadedPreview, setUploadedPreview] = useState<string>('')
@@ -20,7 +22,12 @@ export function Generate() {
 
   const { data: assetsData, isLoading } = useQuery({
     queryKey: ['generated-assets', tab],
-    queryFn: async () => (await fetch(`/api/generate?type=${tab}`)).json(),
+    queryFn: async () => {
+      const response = await fetch(`/api/generate?type=${tab}`)
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not load generated assets')
+      return data
+    },
     refetchInterval: 10000,
   })
 
@@ -57,6 +64,8 @@ export function Generate() {
   async function generate() {
     if (tab === 'thumbnail' && !title) return
     if (tab !== 'thumbnail' && !prompt) return
+    setGenerationError('')
+    setGenerationMessage('')
     setGenerating(true)
     try {
       // Use multipart/form-data if we have an uploaded image
@@ -71,6 +80,7 @@ export function Generate() {
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Generation failed')
         toast.success(data.message || 'Image-to-image generation started!')
+        setGenerationMessage(data.message || 'Generation started. The result will appear below automatically.')
         queryClient.invalidateQueries({ queryKey: ['generated-assets', tab] })
         clearImage()
       } else {
@@ -90,11 +100,14 @@ export function Generate() {
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Generation failed')
         toast.success(data.message || 'Asset generated!')
+        setGenerationMessage(data.message || 'Your asset was generated successfully.')
         queryClient.invalidateQueries({ queryKey: ['generated-assets', tab] })
         setPrompt('')
       }
     } catch (err: any) {
-      toast.error(err.message)
+      const message = err?.message || 'Generation failed. Check your configuration and try again.'
+      setGenerationError(message)
+      toast.error(message, { duration: 8000 })
     } finally {
       setGenerating(false)
     }
@@ -104,8 +117,8 @@ export function Generate() {
   const videos: any[] = videosData?.videos || []
 
   const tabs = [
-    { id: 'thumbnail' as const, label: 'AI Thumbnail', icon: ImageIcon, desc: 'Generate eye-catching thumbnails (no API key needed)' },
-    { id: 'image' as const, label: 'AI Image', icon: ImageIcon, desc: 'Generate any image from text (no API key needed)' },
+    { id: 'thumbnail' as const, label: 'AI Thumbnail', icon: ImageIcon, desc: 'Create an eye-catching video thumbnail' },
+    { id: 'image' as const, label: 'AI Image', icon: ImageIcon, desc: 'Create a standalone image from a description' },
     { id: 'broll' as const, label: 'AI B-roll Video', icon: Film, desc: 'Generate video clips from text (requires Replicate API token)' },
   ]
 
@@ -218,18 +231,35 @@ export function Generate() {
           </>
         ) : (
           <div>
-            <label className="text-sm font-medium">Prompt</label>
-            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={3} placeholder={tab === 'broll' ? 'cinematic shot of a golden retriever running on a beach at sunset, slow motion' : 'a cozy living room with a sleeping cat, warm lighting, watercolor style'} className="w-full mt-1 px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm" />
+            <label className="text-sm font-medium">{tab === 'broll' ? 'Describe the scene' : 'Describe the image'}</label>
+            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={3} placeholder={tab === 'broll' ? 'Cinematic shot of a golden retriever running on a beach at sunset, slow motion' : 'A cozy living room with a sleeping cat, warm lighting, watercolor style'} className="w-full mt-1 px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm" />
           </div>
         )}
         <button
           onClick={generate}
-          disabled={generating || (tab === 'thumbnail' ? !title : !prompt) || (uploadedImage && !replicateConfigured)}
+          disabled={generating || (tab === 'thumbnail' ? !title : !prompt) || (!!uploadedImage && !replicateConfigured)}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-medium disabled:opacity-50"
         >
           {generating ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />}
           {generating ? 'Generating…' : uploadedImage ? 'Generate from your photo' : `Generate ${tab === 'broll' ? 'video' : 'image'}`}
         </button>
+        {generating && (
+          <div role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+            Generating your {tab === 'broll' ? 'video' : 'image'}… Keep this page open. Images may take up to a minute; videos may take several minutes.
+          </div>
+        )}
+        {generationMessage && !generating && (
+          <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+            {generationMessage}
+          </div>
+        )}
+        {generationError && !generating && (
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+            <p className="font-medium">Generation failed</p>
+            <p className="mt-1">{generationError}</p>
+            <button onClick={generate} className="mt-2 rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950">Try again</button>
+          </div>
+        )}
         {tab === 'broll' && (
           <p className="text-xs text-amber-600 flex items-center gap-1">
             <AlertCircle className="size-3" /> Requires Replicate API token in Settings → API Keys. Generation takes 2-5 minutes.
@@ -243,7 +273,11 @@ export function Generate() {
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="size-6 animate-spin text-neutral-400" /></div>
         ) : assets.length === 0 ? (
-          <p className="text-sm text-neutral-500 text-center py-8">No {tab} generations yet.</p>
+          <div className="rounded-xl border border-dashed border-neutral-300 px-6 py-10 text-center dark:border-neutral-700">
+            <ImageIcon className="mx-auto size-8 text-neutral-300 dark:text-neutral-600" />
+            <p className="mt-3 text-sm font-medium">No {tab} generations yet</p>
+            <p className="mt-1 text-xs text-neutral-500">Enter a description above to create your first result.</p>
+          </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {assets.map(a => (

@@ -13,7 +13,6 @@ interface SecretField {
   placeholder?: string
   helpUrl?: string
   hasValue: boolean
-  preview: string
   updatedAt: string | null
 }
 
@@ -161,7 +160,7 @@ export function ApiKeys() {
                   </label>
                   {field.hasValue && (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-neutral-500">{field.preview}</span>
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400">Saved securely</span>
                       <button
                         onClick={() => clearSecret(field.id, field.label)}
                         className="text-red-600 hover:text-red-700"
