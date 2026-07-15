@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { UploadCloud, Loader2, Film, Image as ImageIcon, X } from 'lucide-react'
@@ -92,8 +92,6 @@ export function Upload() {
     transitionSec: 0.7,
     voiceoverScript: '',  // optional custom script for image uploads
   })
-  const fileInput = useRef<HTMLInputElement>(null)
-  const imageInput = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
   const { data: assetsData } = useQuery({
@@ -205,31 +203,31 @@ export function Upload() {
       <p className="text-sm text-neutral-500 mb-4">Upload videos OR photos. Photos are auto-converted to a video with Ken Burns effect, voiceover, captions, and music.</p>
 
       {/* Drop zone */}
-      <div
+      <label
+        htmlFor="content-video-upload"
         onDrop={handleDrop}
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
-        onClick={() => fileInput.current?.click()}
         className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-colors ${
           dragging ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30' : 'border-neutral-300 dark:border-neutral-700 hover:border-neutral-400 dark:hover:border-neutral-600'
         }`}
       >
-        <input ref={fileInput} type="file" accept="video/*,.mp4,.mov,.m4v,.webm" multiple className="hidden" onChange={handleVideoSelect} />
-        <input ref={imageInput} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelect} />
+        <input id="content-video-upload" type="file" accept="video/*,.mp4,.mov,.m4v,.webm" multiple className="sr-only" onChange={handleVideoSelect} />
         <UploadCloud className="size-10 mx-auto text-neutral-400 mb-2" />
-        <p className="text-sm font-medium">{dragging ? 'Drop files here' : 'Click or drag videos here'}</p>
+        <p className="text-sm font-medium">{dragging ? 'Drop files here' : 'Choose a video from this device'}</p>
         <p className="text-xs text-neutral-500 mt-1">MP4, MOV, WebM — multiple files allowed</p>
-      </div>
+      </label>
 
       {/* Image upload button (separate) */}
       <div className="mt-3 flex justify-center">
-        <button
-          onClick={() => imageInput.current?.click()}
+        <input id="content-image-upload" type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" multiple className="sr-only" onChange={handleImageSelect} />
+        <label
+          htmlFor="content-image-upload"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-purple-300 text-purple-700 dark:text-purple-300 text-sm font-medium hover:bg-purple-50 dark:hover:bg-purple-900/20"
         >
           <ImageIcon className="size-4" />
           Upload Photos Instead
-        </button>
+        </label>
         <span className="text-xs text-neutral-500 self-center ml-3">→ becomes a video with voiceover + music + captions</span>
       </div>
 
