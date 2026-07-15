@@ -9,9 +9,23 @@ import { createClient } from '@/lib/supabase/browser'
 import { getSupabaseEnv } from '@/lib/supabase/env'
 
 const TUS_CHUNK_SIZE = 6 * 1024 * 1024
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm'])
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'])
+
+function fileExtension(file: Pick<File, 'name'>) {
+  return file.name.toLowerCase().split('.').pop() || ''
+}
+
+function isVideoFile(file: File) {
+  return file.type.startsWith('video/') || VIDEO_EXTENSIONS.has(fileExtension(file))
+}
+
+function isImageFile(file: File) {
+  return file.type.startsWith('image/') || IMAGE_EXTENSIONS.has(fileExtension(file))
+}
 
 function uploadContentType(file: File) {
-  const extension = file.name.toLowerCase().split('.').pop()
+  const extension = fileExtension(file)
   if (extension === 'mov') return 'video/quicktime'
   if (extension === 'mp4' || extension === 'm4v') return 'video/mp4'
   if (extension === 'webm') return 'video/webm'
@@ -91,25 +105,31 @@ export function Upload() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
-    const dropped = Array.from(e.dataTransfer.files).filter(f =>
-      f.type.startsWith('video/') || f.type.startsWith('image/')
-    )
+    const selected = Array.from(e.dataTransfer.files)
+    const dropped = selected.filter(f => isVideoFile(f) || isImageFile(f))
+    if (selected.length > dropped.length) toast.error('Use MP4, MOV, M4V, WebM, JPG, PNG, WebP, HEIC, or HEIF files.')
     setFiles(prev => [...prev, ...dropped])
   }, [])
 
   const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const arr = Array.from(e.target.files || []).filter(f => f.type.startsWith('video/'))
+    const selected = Array.from(e.target.files || [])
+    const arr = selected.filter(isVideoFile)
+    if (selected.length > arr.length) toast.error('That video format is not supported. Use MP4, MOV, M4V, or WebM.')
     setFiles(prev => [...prev, ...arr])
+    e.target.value = ''
   }
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const arr = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'))
+    const selected = Array.from(e.target.files || [])
+    const arr = selected.filter(isImageFile)
+    if (selected.length > arr.length) toast.error('That photo format is not supported. Use JPG, PNG, WebP, HEIC, or HEIF.')
     setFiles(prev => [...prev, ...arr])
+    e.target.value = ''
   }
 
   // Separate files by type
-  const videoFiles = files.filter(f => f.type.startsWith('video/'))
-  const imageFiles = files.filter(f => f.type.startsWith('image/'))
+  const videoFiles = files.filter(isVideoFile)
+  const imageFiles = files.filter(isImageFile)
 
   const startUpload = async () => {
     if (files.length === 0) return
@@ -142,7 +162,7 @@ export function Upload() {
         const start = await fetch('/api/uploads/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ files: batch.files.map(file => ({ name: file.name, type: file.type, size: file.size })), settings: batch.settings }),
+          body: JSON.stringify({ files: batch.files.map(file => ({ name: file.name, type: uploadContentType(file), size: file.size })), settings: batch.settings }),
         })
         const prepared = await start.json()
         if (!start.ok) throw new Error(prepared.error || 'Could not start the upload')
@@ -194,7 +214,7 @@ export function Upload() {
           dragging ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30' : 'border-neutral-300 dark:border-neutral-700 hover:border-neutral-400 dark:hover:border-neutral-600'
         }`}
       >
-        <input ref={fileInput} type="file" accept="video/*" multiple className="hidden" onChange={handleVideoSelect} />
+        <input ref={fileInput} type="file" accept="video/*,.mp4,.mov,.m4v,.webm" multiple className="hidden" onChange={handleVideoSelect} />
         <input ref={imageInput} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelect} />
         <UploadCloud className="size-10 mx-auto text-neutral-400 mb-2" />
         <p className="text-sm font-medium">{dragging ? 'Drop files here' : 'Click or drag videos here'}</p>
@@ -375,7 +395,7 @@ function FileRow({ file, icon: Icon, onRemove, preview }: { file: File; icon: an
         )}
         <div className="min-w-0">
           <p className="text-sm font-medium truncate">{file.name}</p>
-          <p className="text-xs text-neutral-500">{(file.size / 1024 / 1024).toFixed(1)} MB · {file.type.startsWith('video/') ? 'Video' : 'Photo'}</p>
+          <p className="text-xs text-neutral-500">{(file.size / 1024 / 1024).toFixed(1)} MB · {isVideoFile(file) ? 'Video' : 'Photo'}</p>
         </div>
       </div>
       <button onClick={onRemove} className="text-neutral-400 hover:text-red-600">
