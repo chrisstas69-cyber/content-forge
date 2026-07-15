@@ -4,7 +4,55 @@ import { useState, useCallback, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { UploadCloud, Loader2, Film, Image as ImageIcon, X } from 'lucide-react'
+import { Upload as TusUpload } from 'tus-js-client'
 import { createClient } from '@/lib/supabase/browser'
+import { getSupabaseEnv } from '@/lib/supabase/env'
+
+const TUS_CHUNK_SIZE = 6 * 1024 * 1024
+
+function uploadContentType(file: File) {
+  const extension = file.name.toLowerCase().split('.').pop()
+  if (extension === 'mov') return 'video/quicktime'
+  if (extension === 'mp4' || extension === 'm4v') return 'video/mp4'
+  if (extension === 'webm') return 'video/webm'
+  return file.type
+}
+
+async function uploadResumable(
+  supabase: ReturnType<typeof createClient>,
+  file: File,
+  objectPath: string,
+  onProgress: (uploaded: number, total: number) => void,
+) {
+  const { data, error } = await supabase.auth.getSession()
+  const accessToken = data.session?.access_token
+  if (error || !accessToken) throw new Error('Your session expired. Sign in again, then retry the upload.')
+
+  const { url } = getSupabaseEnv()
+  await new Promise<void>((resolve, reject) => {
+    const upload = new TusUpload(file, {
+      endpoint: `${url}/storage/v1/upload/resumable`,
+      retryDelays: [0, 1_000, 3_000, 5_000, 10_000],
+      chunkSize: TUS_CHUNK_SIZE,
+      uploadSize: file.size,
+      removeFingerprintOnSuccess: true,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'x-upsert': 'false',
+      },
+      metadata: {
+        bucketName: 'content-media',
+        objectName: objectPath,
+        contentType: uploadContentType(file),
+        cacheControl: '3600',
+      },
+      onError: reject,
+      onProgress,
+      onSuccess: () => resolve(),
+    })
+    upload.start()
+  })
+}
 
 export function Upload() {
   const [dragging, setDragging] = useState(false)
@@ -101,10 +149,10 @@ export function Upload() {
 
         for (let index = 0; index < batch.files.length; index += 1) {
           const target = prepared.uploads[index]
-          const { error } = await supabase.storage.from('content-media').uploadToSignedUrl(target.path, target.token, batch.files[index], {
-            contentType: batch.files[index].type,
+          await uploadResumable(supabase, batch.files[index], target.path, (bytesUploaded, bytesTotal) => {
+            const completed = uploadedFiles + (bytesTotal > 0 ? bytesUploaded / bytesTotal : 0)
+            setUploadProgress(Math.round((completed / totalFiles) * 100))
           })
-          if (error) throw new Error(`Upload failed for ${batch.files[index].name}: ${error.message}`)
           uploadedFiles += 1
           setUploadProgress(Math.round((uploadedFiles / totalFiles) * 100))
         }
