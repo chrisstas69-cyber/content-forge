@@ -22,6 +22,14 @@ export async function POST(req:NextRequest) {
   const paths=files.map(f=>`${user.id}/${membership.workspace_id}/${itemId}/${randomUUID()}${safeExtension(f.name)}`)
   const { error:insertError } = await supabase.from('content_items').insert({ id:itemId, workspace_id:membership.workspace_id, user_id:user.id, filename:allImages&&files.length>1?`${files[0].name} (+${files.length-1} more)`:files[0].name, kind:allImages?'slideshow':'video', mime_type:allImages?'image/jpeg':files[0].type, size_bytes:files.reduce((s,f)=>s+f.size,0), source_paths:paths, edit_settings:parsed.data.settings })
   if (insertError) { console.error('Could not create content item:',insertError); return NextResponse.json({error:'The media database is not ready. Apply the latest Supabase migration.'},{status:503}) }
-  const uploads=paths.map((path,index)=>({name:files[index].name,path}))
+  const uploads:{name:string;path:string;token:string}[]=[]
+  for (let index=0;index<paths.length;index+=1) {
+    const {data,error}=await supabase.storage.from('content-media').createSignedUploadUrl(paths[index])
+    if (error||!data) {
+      await supabase.from('content_items').delete().eq('id',itemId)
+      return NextResponse.json({error:'Could not prepare secure storage. Please retry.'},{status:503})
+    }
+    uploads.push({name:files[index].name,path:data.path,token:data.token})
+  }
   return NextResponse.json({itemId,uploads})
 }

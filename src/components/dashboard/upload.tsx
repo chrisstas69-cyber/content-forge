@@ -42,7 +42,7 @@ async function uploadResumable(
   const accessToken = data.session?.access_token
   if (error || !accessToken) throw new Error('Your session expired. Sign in again, then retry the upload.')
 
-  const { url } = getSupabaseEnv()
+  const { url, key } = getSupabaseEnv()
   await new Promise<void>((resolve, reject) => {
     const upload = new TusUpload(file, {
       endpoint: `${url}/storage/v1/upload/resumable`,
@@ -52,6 +52,7 @@ async function uploadResumable(
       removeFingerprintOnSuccess: true,
       headers: {
         authorization: `Bearer ${accessToken}`,
+        apikey: key,
         'x-upsert': 'false',
       },
       metadata: {
@@ -167,10 +168,21 @@ export function Upload() {
 
         for (let index = 0; index < batch.files.length; index += 1) {
           const target = prepared.uploads[index]
-          await uploadResumable(supabase, batch.files[index], target.path, (bytesUploaded, bytesTotal) => {
-            const completed = uploadedFiles + (bytesTotal > 0 ? bytesUploaded / bytesTotal : 0)
-            setUploadProgress(Math.round((completed / totalFiles) * 100))
-          })
+          try {
+            await uploadResumable(supabase, batch.files[index], target.path, (bytesUploaded, bytesTotal) => {
+              const completed = uploadedFiles + (bytesTotal > 0 ? bytesUploaded / bytesTotal : 0)
+              setUploadProgress(Math.round((completed / totalFiles) * 100))
+            })
+          } catch (resumableError) {
+            console.warn('Resumable upload failed; trying signed upload.', resumableError)
+            const { error: signedError } = await supabase.storage.from('content-media').uploadToSignedUrl(
+              target.path,
+              target.token,
+              batch.files[index],
+              { contentType: uploadContentType(batch.files[index]) },
+            )
+            if (signedError) throw new Error(`Upload failed for ${batch.files[index].name}: ${signedError.message}`)
+          }
           uploadedFiles += 1
           setUploadProgress(Math.round((uploadedFiles / totalFiles) * 100))
         }
