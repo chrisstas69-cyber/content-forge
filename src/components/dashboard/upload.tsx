@@ -4,11 +4,13 @@ import { useState, useCallback, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { UploadCloud, Loader2, Film, Image as ImageIcon, X } from 'lucide-react'
+import { createClient } from '@/lib/supabase/browser'
 
 export function Upload() {
   const [dragging, setDragging] = useState(false)
   const [files, setFiles] = useState<File[]>([])
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [settings, setSettings] = useState({
     burnCaptions: true,
     watermarkPosition: 'bottom-right' as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center',
@@ -64,26 +66,12 @@ export function Upload() {
   const startUpload = async () => {
     if (files.length === 0) return
     setUploading(true)
+    setUploadProgress(0)
     try {
-      // Upload videos one by one (existing behavior)
-      for (const file of videoFiles) {
-        const fd = new FormData()
-        fd.append('video', file)
-        fd.append('settings', JSON.stringify(settings))
-        const res = await fetch('/api/videos', { method: 'POST', body: fd })
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          throw new Error(err.error || `Upload failed for ${file.name}`)
-        }
-      }
-
-      // Upload all images together as a single slideshow (new behavior)
-      if (imageFiles.length > 0) {
-        const fd = new FormData()
-        for (const img of imageFiles) {
-          fd.append('images', img)
-        }
-        fd.append('settings', JSON.stringify({
+      const batches: { files: File[]; settings: Record<string, unknown> }[] = videoFiles.map(file => ({ files: [file], settings }))
+      if (imageFiles.length) batches.push({
+        files: imageFiles,
+        settings: {
           perImageSec: settings.perImageSec,
           transitionSec: settings.transitionSec,
           burnCaptions: settings.burnCaptions,
@@ -96,18 +84,41 @@ export function Upload() {
           watermarkPosition: settings.watermarkPosition,
           watermarkOpacity: settings.watermarkOpacity,
           watermarkScale: settings.watermarkScale,
-        }))
-        const res = await fetch('/api/videos', { method: 'POST', body: fd })
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          throw new Error(err.error || `Image upload failed`)
+        },
+      })
+
+      const supabase = createClient()
+      let uploadedFiles = 0
+      const totalFiles = files.length
+      for (const batch of batches) {
+        const start = await fetch('/api/uploads/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: batch.files.map(file => ({ name: file.name, type: file.type, size: file.size })), settings: batch.settings }),
+        })
+        const prepared = await start.json()
+        if (!start.ok) throw new Error(prepared.error || 'Could not start the upload')
+
+        for (let index = 0; index < batch.files.length; index += 1) {
+          const target = prepared.uploads[index]
+          const { error } = await supabase.storage.from('content-media').uploadToSignedUrl(target.path, target.token, batch.files[index], {
+            contentType: batch.files[index].type,
+          })
+          if (error) throw new Error(`Upload failed for ${batch.files[index].name}: ${error.message}`)
+          uploadedFiles += 1
+          setUploadProgress(Math.round((uploadedFiles / totalFiles) * 100))
         }
-        toast.success(`${imageFiles.length} image(s) → slideshow queued!`)
+
+        const complete = await fetch('/api/uploads/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemId: prepared.itemId }),
+        })
+        const completed = await complete.json()
+        if (!complete.ok) throw new Error(completed.error || 'The upload finished but could not be queued')
       }
 
-      if (videoFiles.length > 0) {
-        toast.success(`${videoFiles.length} video(s) queued for processing`)
-      }
+      toast.success(`${files.length} file(s) uploaded safely and queued`)
 
       setFiles([])
       queryClient.invalidateQueries({ queryKey: ['videos'] })
@@ -116,6 +127,7 @@ export function Upload() {
       toast.error(err.message)
     } finally {
       setUploading(false)
+      setUploadProgress(0)
     }
   }
 
@@ -291,7 +303,7 @@ export function Upload() {
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-500 text-white text-sm font-semibold disabled:opacity-50"
         >
           {uploading ? <Loader2 className="size-4 animate-spin" /> : <UploadCloud className="size-4" />}
-          {uploading ? 'Uploading…' : `Upload ${files.length} file(s)`}
+          {uploading ? `Uploading… ${uploadProgress}%` : `Upload ${files.length} file(s)`}
         </button>
       </div>
     </div>

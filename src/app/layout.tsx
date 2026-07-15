@@ -20,7 +20,8 @@ export const metadata: Metadata = {
   keywords: ["content automation", "AI video editing", "social media scheduler", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
   authors: [{ name: "ContentForge" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/logo.svg",
+    apple: "/logo.svg",
   },
   appleWebApp: {
     capable: true,

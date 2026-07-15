@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 
@@ -19,42 +19,26 @@ function databaseErrorHint(error: unknown) {
 
 export async function GET() {
   try {
-    const total = await db.video.count()
-    const ready = await db.video.count({ where: { status: 'ready' } })
-    const published = await db.video.count({ where: { status: 'published' } })
-    const failed = await db.video.count({ where: { status: 'failed' } })
-    const processing = await db.video.count({ where: { status: { in: ['pending', 'editing', 'transcribing', 'scoring'] } } })
-
-    const accounts = await db.socialAccount.findMany({ where: { connected: true } })
-    const posts = await db.post.count()
-    const publishedPosts = await db.post.count({ where: { status: 'published' } })
-
-    const all = await db.video.findMany({ where: { viralScore: { not: null } }, select: { viralScore: true } })
-    const avgScore = all.length > 0 ? Math.round(all.reduce((sum, video) => sum + (video.viralScore || 0), 0) / all.length) : 0
-
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-    const recentVideos = await db.video.count({ where: { createdAt: { gte: sevenDaysAgo } } })
-
-    const scheduled = await db.post.count({ where: { status: 'scheduled' } })
-    const totalFormats = await db.video.count({ where: { NOT: { processedFormats: null } } })
+    const { data: items, error } = await supabase.from('content_items').select('status, metadata, created_at')
+    if (error) throw error
+    const rows = items || []
+    const scores = rows.map(row => Number((row.metadata as any)?.viralScore)).filter(Number.isFinite)
 
     return NextResponse.json({
-      total,
-      ready,
-      published,
-      failed,
-      processing,
-      connectedAccounts: accounts.length,
-      accountsByPlatform: accounts.reduce((result: Record<string, number>, account) => {
-        result[account.platform] = (result[account.platform] || 0) + 1
-        return result
-      }, {}),
-      totalPosts: posts,
-      publishedPosts,
-      avgViralScore: avgScore,
-      recentVideos,
-      scheduled,
-      totalFormats,
+      total: rows.length,
+      ready: rows.filter(row => row.status === 'ready').length,
+      published: 0,
+      failed: rows.filter(row => row.status === 'failed').length,
+      processing: rows.filter(row => ['uploading','queued','processing'].includes(row.status)).length,
+      connectedAccounts: 0, accountsByPlatform: {}, totalPosts: 0, publishedPosts: 0,
+      avgViralScore: scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0,
+      recentVideos: rows.filter(row => new Date(row.created_at) >= sevenDaysAgo).length,
+      scheduled: 0,
+      totalFormats: rows.filter(row => row.status === 'ready').length,
     })
   } catch (error) {
     console.error('Dashboard stats failed:', error)
