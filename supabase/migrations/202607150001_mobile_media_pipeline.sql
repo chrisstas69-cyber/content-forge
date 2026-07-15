@@ -56,3 +56,33 @@ drop policy if exists "media_select_own_folder" on storage.objects;
 create policy "media_select_own_folder" on storage.objects for select to authenticated using (bucket_id='content-media' and (storage.foldername(name))[1]=(select auth.uid())::text);
 drop policy if exists "media_delete_own_folder" on storage.objects;
 create policy "media_delete_own_folder" on storage.objects for delete to authenticated using (bucket_id='content-media' and (storage.foldername(name))[1]=(select auth.uid())::text);
+
+-- The external worker uses the service role to atomically claim one queued job.
+create or replace function public.claim_processing_job(worker_id text)
+returns table (
+  job_id uuid, attempts integer, content_item_id uuid, workspace_id uuid, user_id uuid,
+  kind text, filename text, mime_type text, source_paths jsonb, edit_settings jsonb, metadata jsonb
+)
+language plpgsql security definer set search_path = public as $$
+begin
+  return query
+  with next_job as (
+    select j.id from public.processing_jobs j
+    where j.status = 'queued'
+    order by j.created_at
+    for update skip locked
+    limit 1
+  ), claimed as (
+    update public.processing_jobs j
+    set status='running', attempts=j.attempts+1, locked_at=now(), locked_by=worker_id, updated_at=now()
+    from next_job n
+    where j.id=n.id
+    returning j.*
+  )
+  select c.id, c.attempts, i.id, i.workspace_id, i.user_id, i.kind, i.filename, i.mime_type,
+         i.source_paths, i.edit_settings, i.metadata
+  from claimed c join public.content_items i on i.id=c.content_item_id;
+end;
+$$;
+revoke all on function public.claim_processing_job(text) from public, anon, authenticated;
+grant execute on function public.claim_processing_job(text) to service_role;
