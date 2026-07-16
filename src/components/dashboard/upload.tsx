@@ -163,6 +163,10 @@ export function Upload() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ files: batch.files.map(file => ({ name: file.name, type: uploadContentType(file), size: file.size })), settings: batch.settings }),
         })
+        if (start.status === 401) {
+          window.location.assign('/login?error=Your%20session%20expired.%20Log%20in%20again%20to%20upload.')
+          return
+        }
         const prepared = await start.json()
         if (!start.ok) throw new Error(prepared.error || 'Could not start the upload')
 
@@ -192,6 +196,10 @@ export function Upload() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ itemId: prepared.itemId }),
         })
+        if (complete.status === 401) {
+          window.location.assign('/login?error=Your%20session%20expired.%20Log%20in%20again%20to%20finish%20the%20upload.')
+          return
+        }
         const completed = await complete.json()
         if (!complete.ok) throw new Error(completed.error || 'The upload finished but could not be queued')
       }

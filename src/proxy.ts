@@ -3,8 +3,18 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const protectedPrefixes = ['/app', '/api/videos', '/api/uploads', '/api/media', '/api/generate', '/api/secrets', '/api/settings', '/api/assets', '/api/social', '/api/agent', '/api/analytics', '/api/ideas', '/api/insights', '/api/calendar', '/api/brandkit', '/api/voice-profile', '/api/posts', '/api/dashboard', '/api/analyze', '/api/frameworks', '/api/competitors', '/api/billing']
 const authPages = ['/login', '/signup']
+const productionHost = 'content-forge-sepia.vercel.app'
+const legacyProductionHosts = new Set(['content-forge-chrisstas69-gmailcoms-projects.vercel.app'])
 
 export async function proxy(request: NextRequest) {
+  const requestHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || ''
+  if (legacyProductionHosts.has(requestHost.split(':')[0])) {
+    const canonicalUrl = request.nextUrl.clone()
+    canonicalUrl.protocol = 'https:'
+    canonicalUrl.host = productionHost
+    return NextResponse.redirect(canonicalUrl, 308)
+  }
+
   let response = NextResponse.next({ request })
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
