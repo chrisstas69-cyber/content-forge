@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Loader2, Image as ImageIcon, Film, Wand2, AlertCircle, Upload, X } from 'lucide-react'
+import { Loader2, Image as ImageIcon, Film, Wand2, AlertCircle, Upload, X, Download, ExternalLink } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 
 export function Generate() {
@@ -343,6 +343,19 @@ export function Generate() {
                     <span className="text-[9px] text-neutral-400">{a.modelUsed}</span>
                     <span className={`text-[9px] px-1.5 py-0.5 rounded ${a.status === 'ready' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : a.status === 'generating' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>{a.status}</span>
                   </div>
+                  {a.status === 'ready' && a.url && a.type !== 'broll' && (
+                    <div className="flex gap-2 mt-2">
+                      <a href={a.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-blue-600 hover:underline">
+                        <ExternalLink className="size-3" /> Open
+                      </a>
+                      <a href={a.url} download className="inline-flex items-center gap-1 text-[10px] text-blue-600 hover:underline">
+                        <Download className="size-3" /> Save
+                      </a>
+                    </div>
+                  )}
+                  {a.status === 'ready' && a.type === 'thumbnail' && a.videoId && (
+                    <p className="mt-2 text-[10px] text-emerald-600">Applied to your selected video</p>
+                  )}
                 </div>
               </div>
             ))}
