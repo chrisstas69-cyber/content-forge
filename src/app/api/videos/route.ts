@@ -137,7 +137,8 @@ export async function GET() {
     console.error('Content library failed:', error)
     return NextResponse.json({ error: 'The media library is not ready. Apply the latest Supabase migration.' }, { status: 503 })
   }
-  return NextResponse.json({ videos: (data as ContentItemRow[]).map(serializeContentItem) })
+  const libraryItems = (data as ContentItemRow[]).filter(item => item.metadata?.source !== 'ai-generation')
+  return NextResponse.json({ videos: libraryItems.map(serializeContentItem) })
 }
 
 function serializeVideo(v: any) {

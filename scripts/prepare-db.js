@@ -5,25 +5,18 @@ const { execSync } = require('child_process')
 const schemaPath = path.join(__dirname, '../prisma/schema.prisma')
 
 function validateDatabaseUrl() {
-  const databaseUrl = process.env.DATABASE_URL
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL is missing.')
+  const candidates = [process.env.DATABASE_URL, process.env.POSTGRES_DATABASE_URL, process.env.POSTGRES_URL]
+  for (const databaseUrl of candidates) {
+    if (!databaseUrl) continue
+    try {
+      const parsed = new URL(databaseUrl)
+      if (['postgres:', 'postgresql:'].includes(parsed.protocol) && !parsed.hash) {
+        process.env.DATABASE_URL = databaseUrl
+        return
+      }
+    } catch {}
   }
-
-  let parsed
-  try {
-    parsed = new URL(databaseUrl)
-  } catch {
-    throw new Error('DATABASE_URL is not a valid PostgreSQL URL.')
-  }
-
-  if (!['postgres:', 'postgresql:'].includes(parsed.protocol)) {
-    throw new Error('DATABASE_URL must use the postgres:// or postgresql:// protocol.')
-  }
-
-  if (parsed.hash) {
-    throw new Error('DATABASE_URL contains an unescaped # character. URL-encode reserved password characters before redeploying.')
-  }
+  throw new Error('No valid PostgreSQL database URL is configured.')
 }
 
 if (process.env.VERCEL === '1') {

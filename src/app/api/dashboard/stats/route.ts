@@ -25,7 +25,7 @@ export async function GET() {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
     const { data: items, error } = await supabase.from('content_items').select('status, metadata, created_at')
     if (error) throw error
-    const rows = items || []
+    const rows = (items || []).filter(row => (row.metadata as any)?.source !== 'ai-generation')
     const scores = rows.map(row => Number((row.metadata as any)?.viralScore)).filter(Number.isFinite)
 
     return NextResponse.json({
