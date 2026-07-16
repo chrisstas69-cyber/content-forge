@@ -6,6 +6,9 @@ import { createClient } from '@/lib/supabase/server'
 const fileSchema = z.object({ name:z.string().min(1).max(255), type:z.string().min(1).max(120), size:z.number().int().positive().max(5*1024*1024*1024) })
 const requestSchema = z.object({ files:z.array(fileSchema).min(1).max(50), settings:z.record(z.string(),z.unknown()).default({}) })
 function safeExtension(name:string) { return name.toLowerCase().match(/\.[a-z0-9]{1,10}$/)?.[0] || '' }
+// Supabase Free projects cap every stored object at 50 MB. Keep each part
+// comfortably below that limit so phone videos can still be uploaded.
+const STORAGE_PART_BYTES = 45 * 1024 * 1024
 
 export async function POST(req:NextRequest) {
   const supabase = await createClient()
@@ -19,17 +22,27 @@ export async function POST(req:NextRequest) {
   if (!allImages && !allVideos) return NextResponse.json({error:'Upload videos or photos as separate batches.'},{status:400})
   if (allVideos && files.length>1) return NextResponse.json({error:'Upload one video at a time for reliable phone uploads.'},{status:400})
   const itemId=randomUUID()
-  const paths=files.map(f=>`${user.id}/${membership.workspace_id}/${itemId}/${randomUUID()}${safeExtension(f.name)}`)
+  const parts=files.flatMap((file,fileIndex)=>{
+    const extension=safeExtension(file.name)
+    const count=allVideos?Math.ceil(file.size/STORAGE_PART_BYTES):1
+    return Array.from({length:count},(_,partIndex)=>{
+      const start=partIndex*STORAGE_PART_BYTES
+      const end=Math.min(file.size,start+STORAGE_PART_BYTES)
+      return {fileIndex,start,end,path:`${user.id}/${membership.workspace_id}/${itemId}/${randomUUID()}-part-${String(partIndex+1).padStart(3,'0')}${extension}`}
+    })
+  })
+  const paths=parts.map(part=>part.path)
   const { error:insertError } = await supabase.from('content_items').insert({ id:itemId, workspace_id:membership.workspace_id, user_id:user.id, filename:allImages&&files.length>1?`${files[0].name} (+${files.length-1} more)`:files[0].name, kind:allImages?'slideshow':'video', mime_type:allImages?'image/jpeg':files[0].type, size_bytes:files.reduce((s,f)=>s+f.size,0), source_paths:paths, edit_settings:parsed.data.settings })
   if (insertError) { console.error('Could not create content item:',insertError); return NextResponse.json({error:'The media database is not ready. Apply the latest Supabase migration.'},{status:503}) }
-  const uploads:{name:string;path:string;token:string}[]=[]
+  const uploads:{name:string;path:string;token:string;fileIndex:number;start:number;end:number}[]=[]
   for (let index=0;index<paths.length;index+=1) {
     const {data,error}=await supabase.storage.from('content-media').createSignedUploadUrl(paths[index])
     if (error||!data) {
       await supabase.from('content_items').delete().eq('id',itemId)
       return NextResponse.json({error:'Could not prepare secure storage. Please retry.'},{status:503})
     }
-    uploads.push({name:files[index].name,path:data.path,token:data.token})
+    const part=parts[index]
+    uploads.push({name:files[part.fileIndex].name,path:data.path,token:data.token,fileIndex:part.fileIndex,start:part.start,end:part.end})
   }
   return NextResponse.json({itemId,uploads})
 }
