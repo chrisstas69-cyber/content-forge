@@ -87,13 +87,19 @@ export const PLATFORM_GROUPS: { id: string; label: string; description: string; 
 // Returns the decrypted secret value, or undefined if not set.
 // Falls back to process.env for backwards compatibility (so users can still use .env if they prefer).
 export async function getSecret(id: string): Promise<string | undefined> {
-  const row = await db.appSecret.findUnique({ where: { id } })
-  if (row) {
-    try {
-      return decrypt(row.cipherText)
-    } catch (err) {
-      console.error(`Failed to decrypt secret ${id}:`, err)
+  try {
+    const row = await db.appSecret.findUnique({ where: { id } })
+    if (row) {
+      try {
+        return decrypt(row.cipherText)
+      } catch (err) {
+        console.error(`Failed to decrypt secret ${id}:`, err)
+      }
     }
+  } catch (err) {
+    // Environment variables remain a valid production configuration even if
+    // the optional legacy secrets table is temporarily unavailable.
+    console.error(`Could not read stored secret ${id}; checking environment fallback:`, err)
   }
   // Fallback: read from process.env (snake_case version of the id)
   const envKey = id.toUpperCase().replace(/\./g, '_')

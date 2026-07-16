@@ -27,12 +27,6 @@ function validateDatabaseUrl() {
 }
 
 if (process.env.VERCEL === '1') {
-  if (process.env.RUN_LEGACY_DB_PUSH !== 'true') {
-    console.log('Skipping legacy Prisma schema sync. The dashboard and upload APIs require the legacy tables.')
-    console.log('For one intentional Preview deployment, set RUN_LEGACY_DB_PUSH=true, review the build, then remove the flag.')
-    process.exit(0)
-  }
-
   try {
     validateDatabaseUrl()
   } catch (error) {
@@ -47,13 +41,26 @@ if (process.env.VERCEL === '1') {
   fs.writeFileSync(schemaPath, schema, 'utf8')
   console.log('Updated schema.prisma to use the PostgreSQL provider.')
 
-  console.log('Running a non-destructive Prisma schema push...')
-  try {
-    execSync('npx prisma db push', { stdio: 'inherit' })
-    console.log('Database synced successfully.')
-  } catch (error) {
-    console.error('Database sync stopped. Review the Prisma output; destructive changes are not accepted automatically.')
-    process.exit(1)
+  if (process.env.RUN_LEGACY_DB_PUSH === 'true') {
+    console.log('Running a non-destructive Prisma schema push...')
+    try {
+      execSync('npx prisma db push', { stdio: 'inherit' })
+      console.log('Database synced successfully.')
+    } catch (error) {
+      console.error('Database sync stopped. Review the Prisma output; destructive changes are not accepted automatically.')
+      process.exit(1)
+    }
+  } else {
+    // Even when schema changes are intentionally disabled, the deployed Prisma
+    // client must still be generated for PostgreSQL. Otherwise it keeps the
+    // checked-in SQLite provider and every legacy DB-backed feature fails.
+    console.log('Skipping schema sync and generating the PostgreSQL Prisma client...')
+    try {
+      execSync('npx prisma generate', { stdio: 'inherit' })
+    } catch (error) {
+      console.error('Could not generate the PostgreSQL Prisma client.')
+      process.exit(1)
+    }
   }
 } else {
   console.log('Local environment detected. Keeping SQLite.')
