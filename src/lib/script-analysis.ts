@@ -1,12 +1,6 @@
 import { db } from '@/lib/db'
-import ZAI from 'z-ai-web-dev-sdk'
+import { getZai } from '@/lib/ai'
 import { getSecret } from '@/lib/secrets'
-
-let zaiInstance: any = null
-async function getZai() {
-  if (!zaiInstance) zaiInstance = await ZAI.create()
-  return zaiInstance
-}
 
 // ---- Transcript fetching per platform ----
 
@@ -117,10 +111,8 @@ export interface ScriptBreakdown {
 
 export async function analyzeScript(
   url: string,
-  opts: { niche?: string; adaptForNiche?: boolean } = {},
+  opts: { niche?: string; adaptForNiche?: boolean; transcript?: string; title?: string } = {},
 ): Promise<{ analysis: ScriptBreakdown; title: string; thumbnailUrl: string; transcript: string }> {
-  const zai = await getZai()
-
   // 1. Extract video ID + platform
   const extracted = extractVideoId(url)
   if (!extracted) throw new Error('Could not identify platform from URL. Supported: YouTube, TikTok, Instagram.')
@@ -130,7 +122,10 @@ export async function analyzeScript(
   let transcript = ''
   let thumbnailUrl = ''
 
-  if (extracted.platform === 'youtube') {
+  if (opts.transcript?.trim()) {
+    title = opts.title?.trim() || 'Pasted video transcript'
+    transcript = opts.transcript.trim()
+  } else if (extracted.platform === 'youtube') {
     const result = await fetchYouTubeTranscript(extracted.videoId)
     title = result.title
     transcript = result.transcript
@@ -148,7 +143,7 @@ export async function analyzeScript(
   }
 
   if (!transcript) {
-    throw new Error('Could not extract transcript from this video. YouTube videos work best.')
+    throw new Error('Automatic transcript retrieval is not available yet. Paste the video transcript below, then analyze it.')
   }
 
   // 3. Get niche + handle for adaptation
@@ -204,6 +199,7 @@ Return ONLY a JSON object:
   "adaptedScript": "${opts.adaptForNiche ? 'full adapted script for the niche' : ''}"
 }`
 
+  const zai = await getZai()
   const result = await zai.chat.completions.create({
     messages: [
       { role: 'system', content: 'You are a JSON-only assistant. Output valid JSON, no extra text.' },
