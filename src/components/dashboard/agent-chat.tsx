@@ -95,10 +95,11 @@ export function AgentChat() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 size-14 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-lg hover:scale-105 transition-transform flex items-center justify-center"
+        className="fixed left-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 size-12 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-lg hover:scale-105 transition-transform flex items-center justify-center md:left-auto md:right-6 md:bottom-6 md:size-14"
         title="Open AI Agent"
+        aria-label="Open AI Agent"
       >
-        <Sparkles className="size-6" />
+        <Sparkles className="size-5 md:size-6" />
         <span className="absolute -top-1 -right-1 size-3 rounded-full bg-emerald-400 ring-2 ring-white" />
       </button>
     )

@@ -29,7 +29,8 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const isProtected = protectedPrefixes.some(prefix => request.nextUrl.pathname.startsWith(prefix))
   const testMode = process.env.TEST_MODE_ENABLED === 'true' && Boolean(process.env.TEST_MODE_USER_EMAIL && process.env.SUPABASE_SERVICE_ROLE_KEY)
-  if (isProtected && !user) {
+  const testUserMismatch = testMode && Boolean(user && user.email !== process.env.TEST_MODE_USER_EMAIL)
+  if (isProtected && (!user || testUserMismatch)) {
     if (request.nextUrl.pathname.startsWith('/api/')) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     if (testMode) return NextResponse.redirect(new URL(`${testAuthPath}?next=${encodeURIComponent(request.nextUrl.pathname + request.nextUrl.search)}`, request.url))
     return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent('Please log in to continue.')}`, request.url))
