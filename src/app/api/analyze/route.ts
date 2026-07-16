@@ -39,12 +39,12 @@ export async function GET(req: NextRequest) {
 // POST: analyze a single video URL
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { url, adaptForNiche, niche } = body
+  const { url, adaptForNiche, niche, transcript, title } = body
 
   if (!url) return NextResponse.json({ error: 'URL required' }, { status: 400 })
 
   try {
-    const result = await analyzeScript(url, { adaptForNiche, niche })
+    const result = await analyzeScript(url, { adaptForNiche, niche, transcript, title })
     return NextResponse.json({ ok: true, analysis: result.analysis, title: result.title, thumbnailUrl: result.thumbnailUrl })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Analysis failed' }, { status: 500 })
