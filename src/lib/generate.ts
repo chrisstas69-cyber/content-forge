@@ -67,6 +67,35 @@ export async function generateImage(prompt: string, size: string = '1024x1024'):
     }
   }
 
+  const openrouterKey = await getSecret('openrouter.api_key')
+  if (openrouterKey) {
+    try {
+      const aspectRatio = size === '1792x1024' || size === '1536x1024' ? '16:9' : '1:1'
+      const res = await fetch('https://openrouter.ai/api/v1/images', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openrouterKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://content-forge-sepia.vercel.app',
+          'X-Title': 'ContentForge',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-3.1-flash-image',
+          prompt,
+          aspect_ratio: aspectRatio,
+          output_format: 'png',
+        }),
+      })
+      const body: any = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error?.message || `OpenRouter returned ${res.status}`)
+      const imageBase64 = body?.data?.[0]?.b64_json
+      if (!imageBase64) throw new Error('OpenRouter returned no image data')
+      return Buffer.from(imageBase64, 'base64')
+    } catch (err: any) {
+      errors.push(`OpenRouter: ${err?.message || String(err)}`)
+    }
+  }
+
   const replicateToken = await getSecret('replicate.api_token')
   if (replicateToken) {
     try {
@@ -107,8 +136,8 @@ export async function generateImage(prompt: string, size: string = '1024x1024'):
     errors.push(`Sandbox AI: ${err?.message || String(err)}`)
   }
 
-  if (!openaiKey && !geminiKey && !replicateToken) {
-    throw new Error('AI image generation needs an OpenAI, Gemini, or Replicate API key. Add one in Settings → API Keys.')
+  if (!openaiKey && !geminiKey && !openrouterKey && !replicateToken) {
+    throw new Error('AI image generation needs an OpenAI, Gemini, OpenRouter, or Replicate API key. Add one in Settings → API Keys.')
   }
   throw new Error(`AI image generation failed. ${errors.join(' | ')}`)
 }
@@ -235,6 +264,34 @@ export async function generateThumbnailFromImage(
       if (imageBase64) return { url: `data:${mimeType};base64,${imageBase64}`, model: 'gemini-3.1-flash-image' }
     } catch (err) {
       console.error('Gemini image editing failed; trying Replicate:', err)
+    }
+  }
+
+  const openrouterKey = await getSecret('openrouter.api_key')
+  if (openrouterKey) {
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/images', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openrouterKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://content-forge-sepia.vercel.app',
+          'X-Title': 'ContentForge',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-3.1-flash-image',
+          prompt: `${fullPrompt} Preserve the main subject and composition.`,
+          aspect_ratio: '16:9',
+          output_format: 'png',
+          input_references: [{ type: 'image_url', image_url: { url: dataUri } }],
+        }),
+      })
+      const body: any = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error?.message || `OpenRouter returned ${res.status}`)
+      const imageBase64 = body?.data?.[0]?.b64_json
+      if (imageBase64) return { url: `data:image/png;base64,${imageBase64}`, model: 'openrouter-gemini-image' }
+    } catch (err) {
+      console.error('OpenRouter image editing failed; trying Replicate:', err)
     }
   }
 
