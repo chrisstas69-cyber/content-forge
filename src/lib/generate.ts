@@ -53,7 +53,6 @@ export async function generateImage(prompt: string, size: string = '1024x1024'):
         },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
         }),
       })
       const body: any = await res.json().catch(() => ({}))
@@ -225,7 +224,6 @@ export async function generateThumbnailFromImage(
             { text: `${fullPrompt} Preserve the main subject and composition. Style strength: ${Math.round(promptStrength * 100)}%.` },
             { inlineData: { mimeType: 'image/png', data: imageBuffer.toString('base64') } },
           ] }],
-          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
         }),
       })
       const body: any = await res.json().catch(() => ({}))
