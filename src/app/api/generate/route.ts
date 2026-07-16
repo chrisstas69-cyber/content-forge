@@ -1,14 +1,31 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
-import { generateImage, generateThumbnail, generateVideoFromText, isReplicateConfigured, downloadToFile } from '@/lib/generate'
-import { getDirs, ensureDirs } from '@/lib/storage'
-import path from 'path'
-import { randomUUID } from 'crypto'
+import { generateImage, generateThumbnail, generateVideoFromText, isReplicateConfigured } from '@/lib/generate'
+import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-// Generate an image (uses ZAI built-in, no API key needed)
+async function storeGeneratedFile(buffer: Buffer, assetId: string, extension: string, contentType: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Please log in again before generating content.')
+  const storagePath = `${user.id}/generated/${assetId}.${extension}`
+  const { error } = await supabase.storage.from('content-media').upload(storagePath, buffer, {
+    contentType,
+    upsert: true,
+  })
+  if (error) throw new Error(`Could not save the generated file: ${error.message}`)
+  return `supabase://content-media/${storagePath}`
+}
+
+async function storeGeneratedUrl(url: string, assetId: string, extension: string, contentType: string) {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Could not download the generated file (${response.status})`)
+  return storeGeneratedFile(Buffer.from(await response.arrayBuffer()), assetId, extension, contentType)
+}
+
+// Generate an image with a configured production AI provider.
 // Supports both JSON (text-only) and multipart/form-data (with image upload for img2img)
 export async function POST(req: NextRequest) {
   const contentType = req.headers.get('content-type') || ''
@@ -47,18 +64,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing type or prompt/title' }, { status: 400 })
   }
 
-  await ensureDirs()
-
+  let activeAssetId: string | undefined
   try {
     if (type === 'image') {
       const asset = await db.generatedAsset.create({
-        data: { type: 'image', prompt, modelUsed: 'zai-image', status: 'generating' },
+        data: { type: 'image', prompt: prompt!, modelUsed: 'ai-image', status: 'generating' },
       })
+      activeAssetId = asset.id
       const buffer = await generateImage(prompt!, '1024x1024')
-      const { assets } = getDirs()
-      const filepath = path.join(assets, `img_${asset.id}.png`)
-      const { promises: fs } = await import('fs')
-      await fs.writeFile(filepath, buffer)
+      const filepath = await storeGeneratedFile(buffer, asset.id, 'png', 'image/png')
       const updated = await db.generatedAsset.update({
         where: { id: asset.id },
         data: { status: 'ready', filePath: filepath, publicUrl: `/api/generate/assets/${asset.id}` },
@@ -73,12 +87,12 @@ export async function POST(req: NextRequest) {
         if (!configured) {
           return NextResponse.json({ error: 'Replicate API token required for image-to-image. Add it in Settings → API Keys.' }, { status: 400 })
         }
-        const { generateThumbnailFromImage, downloadToFile } = await import('@/lib/generate')
+        const { generateThumbnailFromImage } = await import('@/lib/generate')
         const asset = await db.generatedAsset.create({
           data: {
             type: 'thumbnail',
             prompt: `${title || prompt} (img2img)`,
-            modelUsed: 'sdxl-img2img',
+            modelUsed: 'flux-dev-img2img',
             status: 'generating',
             videoId: videoId || null,
           },
@@ -90,10 +104,7 @@ export async function POST(req: NextRequest) {
               promptStrength,
               niche,
             })
-            const { assets } = getDirs()
-            await ensureDirs()
-            const filepath = path.join(assets, `thumb_${asset.id}.png`)
-            await downloadToFile(result.url, filepath)
+            const filepath = await storeGeneratedUrl(result.url, asset.id, 'png', 'image/png')
             await db.generatedAsset.update({
               where: { id: asset.id },
               data: { status: 'ready', filePath: filepath, publicUrl: `/api/generate/assets/${asset.id}` },
@@ -110,13 +121,11 @@ export async function POST(req: NextRequest) {
 
       // Standard text-to-image thumbnail (no upload)
       const asset = await db.generatedAsset.create({
-        data: { type: 'thumbnail', prompt: title || prompt, modelUsed: 'zai-image', status: 'generating', videoId: videoId || null },
+        data: { type: 'thumbnail', prompt: (title || prompt)!, modelUsed: 'ai-image', status: 'generating', videoId: videoId || null },
       })
+      activeAssetId = asset.id
       const buffer = await generateThumbnail(title || prompt!, niche)
-      const { assets } = getDirs()
-      const filepath = path.join(assets, `thumb_${asset.id}.png`)
-      const { promises: fs } = await import('fs')
-      await fs.writeFile(filepath, buffer)
+      const filepath = await storeGeneratedFile(buffer, asset.id, 'png', 'image/png')
       const updated = await db.generatedAsset.update({
         where: { id: asset.id },
         data: { status: 'ready', filePath: filepath, publicUrl: `/api/generate/assets/${asset.id}` },
@@ -131,16 +140,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Replicate API token not set. Go to Settings → API Keys to add it.' }, { status: 400 })
       }
       const asset = await db.generatedAsset.create({
-        data: { type: 'broll', prompt, modelUsed: 'stable-video-diffusion', status: 'generating' },
+        data: { type: 'broll', prompt: prompt!, modelUsed: 'seedance-1-pro', status: 'generating' },
       })
       // Run in background — Replicate can take minutes
       after(async () => {
         try {
-          const result = await generateVideoFromText(prompt)
-          const { assets } = getDirs()
-          await ensureDirs()
-          const filepath = path.join(assets, `broll_${asset.id}.mp4`)
-          await downloadToFile(result.url, filepath)
+          const result = await generateVideoFromText(prompt!)
+          const filepath = await storeGeneratedUrl(result.url, asset.id, 'mp4', 'video/mp4')
           await db.generatedAsset.update({
             where: { id: asset.id },
             data: { status: 'ready', filePath: filepath, publicUrl: result.url, thumbnailUrl: `/api/generate/assets/${asset.id}` },
@@ -157,6 +163,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: 'Invalid type. Use image, thumbnail, or broll.' }, { status: 400 })
   } catch (err: any) {
+    if (activeAssetId) {
+      await db.generatedAsset.update({
+        where: { id: activeAssetId },
+        data: { status: 'failed', errorMessage: err?.message || String(err) },
+      }).catch(() => {})
+    }
     return NextResponse.json({ error: err?.message || 'Generation failed' }, { status: 500 })
   }
 }

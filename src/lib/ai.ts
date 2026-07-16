@@ -17,6 +17,7 @@ export async function getZai() {
     }
 
     zaiInstance = {
+      images: rawZai?.images,
       audio: rawZai ? rawZai.audio : {
         speech: {
           create: async () => {
