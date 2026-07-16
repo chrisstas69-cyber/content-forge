@@ -79,7 +79,7 @@ export const PLATFORM_GROUPS: { id: string; label: string; description: string; 
   { id: 'tiktok', label: 'TikTok', description: 'TikTok Developers app with video.upload + video.publish scopes', helpUrl: 'https://developers.tiktok.com/app/quickstart' },
   { id: 'meta', label: 'Instagram + Facebook', description: 'One Meta app powers both Instagram and Facebook publishing', helpUrl: 'https://developers.facebook.com/apps/' },
   { id: 'x', label: 'X (Twitter)', description: 'Twitter Developer Portal project with OAuth 2.0', helpUrl: 'https://developer.twitter.com/en/portal/dashboard' },
-  { id: 'replicate', label: 'Replicate (AI Video Gen)', description: 'Optional — for AI text-to-video B-roll generation. Images use built-in AI (no key needed).', helpUrl: 'https://replicate.com/account/api-tokens' },
+  { id: 'replicate', label: 'Replicate (AI Video Gen)', description: 'Used for AI B-roll video and as a fallback image provider.', helpUrl: 'https://replicate.com/account/api-tokens' },
   { id: 'llm', label: 'AI Language Models (LLMs)', description: 'Optional — custom LLM key. If set, text generation, video analysis, and AI replies will run via your account instead of the sandbox SDK.', helpUrl: 'https://platform.openai.com/' },
 ]
 

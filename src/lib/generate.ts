@@ -42,6 +42,32 @@ export async function generateImage(prompt: string, size: string = '1024x1024'):
     }
   }
 
+  const geminiKey = await getSecret('gemini.api_key')
+  if (geminiKey) {
+    try {
+      const res = await fetch('https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent', {
+        method: 'POST',
+        headers: {
+          'x-goog-api-key': geminiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+        }),
+      })
+      const body: any = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error?.message || `Gemini returned ${res.status}`)
+      const parts = body?.candidates?.[0]?.content?.parts || []
+      const imagePart = parts.find((part: any) => part.inlineData?.data || part.inline_data?.data)
+      const imageBase64 = imagePart?.inlineData?.data || imagePart?.inline_data?.data
+      if (!imageBase64) throw new Error('Gemini returned no image data')
+      return Buffer.from(imageBase64, 'base64')
+    } catch (err: any) {
+      errors.push(`Gemini: ${err?.message || String(err)}`)
+    }
+  }
+
   const replicateToken = await getSecret('replicate.api_token')
   if (replicateToken) {
     try {
@@ -82,8 +108,8 @@ export async function generateImage(prompt: string, size: string = '1024x1024'):
     errors.push(`Sandbox AI: ${err?.message || String(err)}`)
   }
 
-  if (!openaiKey && !replicateToken) {
-    throw new Error('AI image generation needs an OpenAI or Replicate API key. Add one in Settings → API Keys.')
+  if (!openaiKey && !geminiKey && !replicateToken) {
+    throw new Error('AI image generation needs an OpenAI, Gemini, or Replicate API key. Add one in Settings → API Keys.')
   }
   throw new Error(`AI image generation failed. ${errors.join(' | ')}`)
 }
@@ -183,13 +209,39 @@ export async function generateThumbnailFromImage(
   prompt: string,
   opts: { promptStrength?: number; niche?: string } = {},
 ): Promise<{ url: string; model: string }> {
-  const token = await getSecret('replicate.api_token')
-  if (!token) throw new Error('Replicate API token not set. Add it in Settings → API Keys.')
-
   const promptStrength = opts.promptStrength ?? 0.35
   const dataUri = `data:image/png;base64,${imageBuffer.toString('base64')}`
 
   const fullPrompt = `${prompt}. Social media thumbnail style, bold, eye-catching, high contrast, professional. ${opts.niche ? `Niche: ${opts.niche}.` : ''}`
+
+  const geminiKey = await getSecret('gemini.api_key')
+  if (geminiKey) {
+    try {
+      const res = await fetch('https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent', {
+        method: 'POST',
+        headers: { 'x-goog-api-key': geminiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { text: `${fullPrompt} Preserve the main subject and composition. Style strength: ${Math.round(promptStrength * 100)}%.` },
+            { inlineData: { mimeType: 'image/png', data: imageBuffer.toString('base64') } },
+          ] }],
+          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+        }),
+      })
+      const body: any = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error?.message || `Gemini returned ${res.status}`)
+      const parts = body?.candidates?.[0]?.content?.parts || []
+      const imagePart = parts.find((part: any) => part.inlineData?.data || part.inline_data?.data)
+      const imageBase64 = imagePart?.inlineData?.data || imagePart?.inline_data?.data
+      const mimeType = imagePart?.inlineData?.mimeType || imagePart?.inline_data?.mime_type || 'image/png'
+      if (imageBase64) return { url: `data:${mimeType};base64,${imageBase64}`, model: 'gemini-3.1-flash-image' }
+    } catch (err) {
+      console.error('Gemini image editing failed; trying Replicate:', err)
+    }
+  }
+
+  const token = await getSecret('replicate.api_token')
+  if (!token) throw new Error('Gemini image editing failed and no Replicate API token is available.')
 
   // SDXL img2img — takes an init_image and transforms it based on the prompt
   const prediction = await createOfficialReplicatePrediction(
