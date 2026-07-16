@@ -37,19 +37,59 @@ export function Generate() {
     enabled: tab === 'thumbnail',
   })
 
-  function handleImageSelect(file: File) {
+  async function optimizePhonePhoto(file: File): Promise<File> {
+    // Vercel's request limit is lower than many untouched phone photos. Resize in
+    // the browser so people can use normal camera pictures without editing them first.
+    const maximumUploadBytes = 3.5 * 1024 * 1024
+    if (file.size <= maximumUploadBytes) return file
+
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const url = URL.createObjectURL(file)
+      const element = new Image()
+      element.onload = () => { URL.revokeObjectURL(url); resolve(element) }
+      element.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read that photo')) }
+      element.src = url
+    })
+
+    let scale = Math.min(1, 2048 / Math.max(image.naturalWidth, image.naturalHeight))
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+      canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height)
+      const quality = Math.max(0.68, 0.88 - attempt * 0.07)
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', quality))
+      if (blob && blob.size <= maximumUploadBytes) {
+        return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg', lastModified: file.lastModified })
+      }
+      scale *= 0.75
+    }
+    throw new Error('That photo is unusually large. Please choose one under 25 MB.')
+  }
+
+  async function handleImageSelect(file: File) {
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       toast.error('Please choose a JPG, PNG, or WebP photo')
       return
     }
-    if (file.size > 4 * 1024 * 1024) {
-      toast.error('Photo is too large. Choose an image smaller than 4 MB.')
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error('Photo is too large. Choose one smaller than 25 MB.')
       return
     }
-    setUploadedImage(file)
+    let uploadFile = file
+    try {
+      if (file.size > 3.5 * 1024 * 1024) {
+        toast.info('Optimizing your phone photo for upload…')
+        uploadFile = await optimizePhonePhoto(file)
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'Could not prepare that photo')
+      return
+    }
+    setUploadedImage(uploadFile)
     const reader = new FileReader()
     reader.onload = e => setUploadedPreview(e.target?.result as string)
-    reader.readAsDataURL(file)
+    reader.readAsDataURL(uploadFile)
   }
 
   function clearImage() {
@@ -194,7 +234,7 @@ export function Generate() {
                 >
                   <Upload className="size-6 mx-auto text-neutral-400 mb-1" />
                   <p className="text-xs text-neutral-500">Click to upload your photo</p>
-                  <p className="text-[10px] text-neutral-400 mt-0.5">JPG, PNG, or WebP · up to 4MB</p>
+                  <p className="text-[10px] text-neutral-400 mt-0.5">JPG, PNG, or WebP · phone photos are optimized automatically</p>
                 </label>
               )}
 
