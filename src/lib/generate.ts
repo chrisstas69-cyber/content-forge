@@ -235,10 +235,11 @@ Aspect ratio: 16:9 horizontal.`
 export async function generateThumbnailFromImage(
   imageBuffer: Buffer,
   prompt: string,
-  opts: { promptStrength?: number; niche?: string } = {},
+  opts: { promptStrength?: number; niche?: string; mimeType?: string } = {},
 ): Promise<{ url: string; model: string }> {
   const promptStrength = opts.promptStrength ?? 0.35
-  const dataUri = `data:image/png;base64,${imageBuffer.toString('base64')}`
+  const mimeType = opts.mimeType || 'image/png'
+  const dataUri = `data:${mimeType};base64,${imageBuffer.toString('base64')}`
 
   const fullPrompt = `${prompt}. Social media thumbnail style, bold, eye-catching, high contrast, professional. ${opts.niche ? `Niche: ${opts.niche}.` : ''}`
 
@@ -251,7 +252,7 @@ export async function generateThumbnailFromImage(
         body: JSON.stringify({
           contents: [{ parts: [
             { text: `${fullPrompt} Preserve the main subject and composition. Style strength: ${Math.round(promptStrength * 100)}%.` },
-            { inlineData: { mimeType: 'image/png', data: imageBuffer.toString('base64') } },
+            { inlineData: { mimeType, data: imageBuffer.toString('base64') } },
           ] }],
         }),
       })
@@ -260,8 +261,8 @@ export async function generateThumbnailFromImage(
       const parts = body?.candidates?.[0]?.content?.parts || []
       const imagePart = parts.find((part: any) => part.inlineData?.data || part.inline_data?.data)
       const imageBase64 = imagePart?.inlineData?.data || imagePart?.inline_data?.data
-      const mimeType = imagePart?.inlineData?.mimeType || imagePart?.inline_data?.mime_type || 'image/png'
-      if (imageBase64) return { url: `data:${mimeType};base64,${imageBase64}`, model: 'gemini-3.1-flash-image' }
+      const responseMimeType = imagePart?.inlineData?.mimeType || imagePart?.inline_data?.mime_type || 'image/png'
+      if (imageBase64) return { url: `data:${responseMimeType};base64,${imageBase64}`, model: 'gemini-3.1-flash-image' }
     } catch (err) {
       console.error('Gemini image editing failed; trying Replicate:', err)
     }

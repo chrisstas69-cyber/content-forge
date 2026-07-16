@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
   let niche = 'pet content'
   let promptStrength: number | undefined
   let uploadedImage: Buffer | undefined
+  let uploadedImageMimeType: string | undefined
 
   if (contentType.includes('multipart/form-data')) {
     const formData = await req.formData()
@@ -45,7 +46,14 @@ export async function POST(req: NextRequest) {
     promptStrength = formData.get('promptStrength') ? parseFloat(formData.get('promptStrength') as string) : undefined
     const imageFile = formData.get('image') as File | null
     if (imageFile) {
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(imageFile.type)) {
+        return NextResponse.json({ error: 'Please upload a JPG, PNG, or WebP image.' }, { status: 400 })
+      }
+      if (imageFile.size > 4 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Please upload an image smaller than 4 MB.' }, { status: 413 })
+      }
       uploadedImage = Buffer.from(await imageFile.arrayBuffer())
+      uploadedImageMimeType = imageFile.type
     }
   } else {
     const body = await req.json()
@@ -124,6 +132,7 @@ export async function POST(req: NextRequest) {
             const result = await generateThumbnailFromImage(uploadedImage!, title || prompt || '', {
               promptStrength,
               niche,
+              mimeType: uploadedImageMimeType,
             })
             const filepath = await storeGeneratedUrl(supabase, userId, result.url, asset.id, 'png', 'image/png')
             await supabase.from('content_items').update({

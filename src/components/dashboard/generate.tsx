@@ -38,8 +38,12 @@ export function Generate() {
   })
 
   function handleImageSelect(file: File) {
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file')
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Please choose a JPG, PNG, or WebP photo')
+      return
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error('Photo is too large. Choose an image smaller than 4 MB.')
       return
     }
     setUploadedImage(file)
@@ -167,9 +171,10 @@ export function Generate() {
               </p>
               <input
                 ref={fileInput}
+                id="thumbnail-photo-upload"
                 type="file"
-                accept="image/*"
-                className="hidden"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
                 onChange={e => e.target.files?.[0] && handleImageSelect(e.target.files[0])}
               />
               {uploadedPreview ? (
@@ -183,14 +188,14 @@ export function Generate() {
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => fileInput.current?.click()}
+                <label
+                  htmlFor="thumbnail-photo-upload"
                   className="w-full p-6 rounded-lg border-2 border-dashed border-neutral-300 dark:border-neutral-700 hover:border-orange-400 dark:hover:border-orange-500 text-center cursor-pointer"
                 >
                   <Upload className="size-6 mx-auto text-neutral-400 mb-1" />
                   <p className="text-xs text-neutral-500">Click to upload your photo</p>
-                  <p className="text-[10px] text-neutral-400 mt-0.5">PNG, JPG up to 10MB</p>
-                </button>
+                  <p className="text-[10px] text-neutral-400 mt-0.5">JPG, PNG, or WebP · up to 4MB</p>
+                </label>
               )}
 
               {/* Prompt strength slider — only shown when image is uploaded */}
