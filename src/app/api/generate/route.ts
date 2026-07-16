@@ -113,15 +113,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (type === 'thumbnail') {
-      // NEW: If an image was uploaded, use img2img via Replicate
+      // If an image was uploaded, use the configured image-editing provider.
+      // OpenRouter/Gemini can edit images directly; Replicate remains a fallback.
       if (uploadedImage) {
-        const configured = await isReplicateConfigured()
-        if (!configured) {
-          return NextResponse.json({ error: 'Replicate API token required for image-to-image. Add it in Settings → API Keys.' }, { status: 400 })
-        }
         const { generateThumbnailFromImage } = await import('@/lib/generate')
-        const asset = await createAsset('thumbnail', `${title || prompt} (img2img)`, 'flux-dev-img2img')
-        // Run in background — Replicate can take 30-60 seconds
+        const asset = await createAsset('thumbnail', `${title || prompt} (img2img)`, 'ai-image-edit')
+        // Run in the background because provider image editing can take 30-60 seconds.
         after(async () => {
           try {
             const result = await generateThumbnailFromImage(uploadedImage!, title || prompt || '', {

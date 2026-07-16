@@ -37,13 +37,6 @@ export function Generate() {
     enabled: tab === 'thumbnail',
   })
 
-  // Check if Replicate is configured (for img2img)
-  const { data: accountsData } = useQuery({
-    queryKey: ['accounts'],
-    queryFn: async () => (await fetch('/api/social/accounts')).json(),
-  })
-  const replicateConfigured = accountsData?.platformStatus?.replicate || false
-
   function handleImageSelect(file: File) {
     if (!file.type.startsWith('image/')) {
       toast.error('Please select an image file')
@@ -220,11 +213,9 @@ export function Generate() {
                      promptStrength < 0.5 ? 'Medium — balanced: your photo + thumbnail styling' :
                      'High — more AI transformation, less like the original'}
                   </p>
-                  {!replicateConfigured && (
-                    <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
-                      <AlertCircle className="size-3" /> Requires Replicate API token in Settings → API Keys
-                    </p>
-                  )}
+                  <p className="text-[10px] text-neutral-500 mt-1">
+                    Uses your configured AI image provider. Replicate is only needed as a fallback.
+                  </p>
                 </div>
               )}
             </div>
@@ -237,7 +228,7 @@ export function Generate() {
         )}
         <button
           onClick={generate}
-          disabled={generating || (tab === 'thumbnail' ? !title : !prompt) || (!!uploadedImage && !replicateConfigured)}
+          disabled={generating || (tab === 'thumbnail' ? !title : !prompt)}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-medium disabled:opacity-50"
         >
           {generating ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />}
