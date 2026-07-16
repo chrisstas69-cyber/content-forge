@@ -22,6 +22,13 @@ async function storeGeneratedUrl(supabase: any, userId: string, url: string, ass
   return storeGeneratedFile(supabase, userId, Buffer.from(await response.arrayBuffer()), assetId, extension, contentType)
 }
 
+async function applyGeneratedThumbnail(supabase: any, userId: string, videoId: string | undefined, thumbnailPath: string) {
+  if (!videoId) return
+  const { data: video } = await supabase.from('content_items')
+    .select('id').eq('id', videoId).eq('user_id', userId).eq('kind', 'video').single()
+  if (video) await supabase.from('content_items').update({ thumbnail_path: thumbnailPath }).eq('id', video.id)
+}
+
 // Generate an image with a configured production AI provider.
 // Supports both JSON (text-only) and multipart/form-data (with image upload for img2img)
 export async function POST(req: NextRequest) {
@@ -100,7 +107,7 @@ export async function POST(req: NextRequest) {
       status: 'processing',
       progress: 10,
       current_step: 'Generating with AI',
-      metadata: { source: 'ai-generation', asset_type: assetType, prompt: assetPrompt, model_used: modelUsed },
+      metadata: { source: 'ai-generation', asset_type: assetType, prompt: assetPrompt, model_used: modelUsed, video_id: videoId || null },
     }).select('*').single()
     if (error || !data) throw new Error(`Could not create the generation record: ${error?.message || 'unknown database error'}`)
     return data
@@ -117,6 +124,7 @@ export async function POST(req: NextRequest) {
         status: 'ready', progress: 100, current_step: 'Ready', output_path: filepath, thumbnail_path: filepath, size_bytes: buffer.length,
       }).eq('id', asset.id).select('*').single()
       if (error || !updated) throw new Error(`Could not finish the generation record: ${error?.message || 'unknown database error'}`)
+      await applyGeneratedThumbnail(supabase, userId, videoId, filepath)
       return NextResponse.json({ asset: updated })
     }
 
@@ -138,6 +146,7 @@ export async function POST(req: NextRequest) {
             await supabase.from('content_items').update({
               status: 'ready', progress: 100, current_step: 'Ready', output_path: filepath, thumbnail_path: filepath,
             }).eq('id', asset.id)
+            await applyGeneratedThumbnail(supabase, userId, videoId, filepath)
           } catch (err: any) {
             await supabase.from('content_items').update({
               status: 'failed', error_message: err?.message || String(err), current_step: 'Generation failed',
@@ -156,6 +165,7 @@ export async function POST(req: NextRequest) {
         status: 'ready', progress: 100, current_step: 'Ready', output_path: filepath, thumbnail_path: filepath, size_bytes: buffer.length,
       }).eq('id', asset.id).select('*').single()
       if (error || !updated) throw new Error(`Could not finish the generation record: ${error?.message || 'unknown database error'}`)
+      await applyGeneratedThumbnail(supabase, userId, videoId, filepath)
       return NextResponse.json({ asset: updated })
     }
 
