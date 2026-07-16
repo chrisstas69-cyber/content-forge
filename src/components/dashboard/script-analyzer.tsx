@@ -9,6 +9,7 @@ export function ScriptAnalyzer() {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<'single' | 'bulk'>('single')
   const [url, setUrl] = useState('')
+  const [transcript, setTranscript] = useState('')
   const [bulkUrls, setBulkUrls] = useState('')
   const [adaptForNiche, setAdaptForNiche] = useState(true)
   const [analyzing, setAnalyzing] = useState(false)
@@ -37,13 +38,14 @@ export function ScriptAnalyzer() {
         const res = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: url.trim(), adaptForNiche }),
+          body: JSON.stringify({ url: url.trim(), transcript: transcript.trim() || undefined, adaptForNiche }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Analysis failed')
         toast.success(`Analyzed! Viral score: ${data.analysis.viralScore}`)
         queryClient.invalidateQueries({ queryKey: ['analyzed-scripts'] })
         setUrl('')
+        setTranscript('')
       } else {
         const urls = bulkUrls.split('\n').map(u => u.trim()).filter(Boolean)
         if (urls.length === 0) {
@@ -154,6 +156,15 @@ export function ScriptAnalyzer() {
               onKeyDown={e => e.key === 'Enter' && analyze()}
             />
             <p className="text-xs text-neutral-500 mt-1">YouTube works best (most reliable transcripts). TikTok and Instagram also supported.</p>
+            <label className="block text-sm font-medium mt-4">Transcript (recommended)</label>
+            <textarea
+              value={transcript}
+              onChange={e => setTranscript(e.target.value)}
+              rows={5}
+              placeholder="Paste the transcript or captions here. This makes analysis work reliably for YouTube, TikTok, and Instagram."
+              className="w-full mt-1 px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent text-sm"
+            />
+            <p className="text-xs text-neutral-500 mt-1">Paste the words spoken in the video. The URL is still saved with the analysis and used as the source link.</p>
           </div>
         ) : (
           <div>
