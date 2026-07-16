@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
-import { promises as fs } from 'fs'
 import { saveUploadedFile } from '@/lib/storage'
 import { processVideoPipeline } from '@/lib/pipeline'
+import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 
@@ -63,13 +63,15 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
-  const v = await db.video.findUnique({ where: { id } })
-  if (!v) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  // Delete files
-  for (const p of [v.originalPath, v.processedPath, v.thumbnailPath].filter(Boolean) as string[]) {
-    try { await fs.unlink(p) } catch {}
-  }
-  await db.video.delete({ where: { id } })
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  const { data: item } = await supabase.from('content_items').select('source_paths, output_path, thumbnail_path').eq('id', id).single()
+  if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const paths = [...((item.source_paths as string[]) || []), item.output_path, item.thumbnail_path].filter(Boolean) as string[]
+  if (paths.length) await supabase.storage.from('content-media').remove(paths)
+  const { error } = await supabase.from('content_items').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: 'Could not delete this item' }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
 

@@ -4,7 +4,8 @@ import { SECRET_FIELDS, PLATFORM_GROUPS, listSecrets, setSecret } from '@/lib/se
 
 export const runtime = 'nodejs'
 
-// GET: list all known secret fields with their status (configured or not, masked preview)
+// GET: list all known secret fields with status only. Never send any portion of
+// a stored credential back to the browser.
 export async function GET() {
   const stored = await listSecrets()
   const storedMap = new Map(stored.map(s => [s.id, s]))
@@ -19,7 +20,6 @@ export async function GET() {
       placeholder: f.placeholder,
       helpUrl: f.helpUrl,
       hasValue: s?.hasValue || false,
-      preview: s?.preview || '',
       updatedAt: s?.updatedAt || null,
     }
   })
@@ -46,8 +46,9 @@ export async function POST(req: NextRequest) {
   const secrets: { id: string; value: string; label: string; platform: string }[] = body.secrets || []
   let saved = 0
   for (const s of secrets) {
-    if (!s.id || !s.value || !s.platform || !s.label) continue
-    await setSecret(s.id, s.value, s.label, s.platform)
+    const definition = SECRET_FIELDS.find(field => field.id === s.id)
+    if (!definition || !s.value) continue
+    await setSecret(definition.id, s.value, definition.label, definition.platform)
     saved++
   }
   return NextResponse.json({ ok: true, saved })

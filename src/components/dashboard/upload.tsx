@@ -1,14 +1,83 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { UploadCloud, Loader2, Film, Image as ImageIcon, X } from 'lucide-react'
+import { Upload as TusUpload } from 'tus-js-client'
+import { createClient } from '@/lib/supabase/browser'
+import { getSupabaseEnv } from '@/lib/supabase/env'
+
+const TUS_CHUNK_SIZE = 6 * 1024 * 1024
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm'])
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'])
+
+function fileExtension(file: Pick<File, 'name'>) {
+  return file.name.toLowerCase().split('.').pop() || ''
+}
+
+function isVideoFile(file: File) {
+  return file.type.startsWith('video/') || VIDEO_EXTENSIONS.has(fileExtension(file))
+}
+
+function isImageFile(file: File) {
+  return file.type.startsWith('image/') || IMAGE_EXTENSIONS.has(fileExtension(file))
+}
+
+function uploadContentType(file: File) {
+  const extension = fileExtension(file)
+  if (extension === 'mov') return 'video/quicktime'
+  if (extension === 'mp4' || extension === 'm4v') return 'video/mp4'
+  if (extension === 'webm') return 'video/webm'
+  if (isVideoFile(file)) return file.type || 'video/mp4'
+  if (isImageFile(file)) return file.type || 'image/jpeg'
+  return file.type || 'application/octet-stream'
+}
+
+async function uploadResumable(
+  supabase: ReturnType<typeof createClient>,
+  file: File,
+  objectPath: string,
+  onProgress: (uploaded: number, total: number) => void,
+) {
+  const { data, error } = await supabase.auth.getSession()
+  const accessToken = data.session?.access_token
+  if (error || !accessToken) throw new Error('Your session expired. Sign in again, then retry the upload.')
+
+  const { url, key } = getSupabaseEnv()
+  const uploadUrl = url.replace('.supabase.co', '.storage.supabase.co')
+  await new Promise<void>((resolve, reject) => {
+    const upload = new TusUpload(file, {
+      endpoint: `${uploadUrl}/storage/v1/upload/resumable`,
+      retryDelays: [0, 1_000, 3_000, 5_000, 10_000, 20_000, 30_000],
+      chunkSize: TUS_CHUNK_SIZE,
+      uploadSize: file.size,
+      removeFingerprintOnSuccess: true,
+      fingerprint: async () => `content-forge-${objectPath}-${file.size}-${file.lastModified}`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        apikey: key,
+        'x-upsert': 'false',
+      },
+      metadata: {
+        bucketName: 'content-media',
+        objectName: objectPath,
+        contentType: uploadContentType(file),
+        cacheControl: '3600',
+      },
+      onError: reject,
+      onProgress,
+      onSuccess: () => resolve(),
+    })
+    upload.start()
+  })
+}
 
 export function Upload() {
   const [dragging, setDragging] = useState(false)
   const [files, setFiles] = useState<File[]>([])
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [settings, setSettings] = useState({
     burnCaptions: true,
     watermarkPosition: 'bottom-right' as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center',
@@ -28,8 +97,6 @@ export function Upload() {
     transitionSec: 0.7,
     voiceoverScript: '',  // optional custom script for image uploads
   })
-  const fileInput = useRef<HTMLInputElement>(null)
-  const imageInput = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
   const { data: assetsData } = useQuery({
@@ -41,49 +108,41 @@ export function Upload() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
-    const dropped = Array.from(e.dataTransfer.files).filter(f =>
-      f.type.startsWith('video/') || f.type.startsWith('image/')
-    )
+    const selected = Array.from(e.dataTransfer.files)
+    const dropped = selected.filter(f => isVideoFile(f) || isImageFile(f))
+    if (selected.length > dropped.length) toast.error('Use MP4, MOV, M4V, WebM, JPG, PNG, WebP, HEIC, or HEIF files.')
     setFiles(prev => [...prev, ...dropped])
   }, [])
 
   const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const arr = Array.from(e.target.files || []).filter(f => f.type.startsWith('video/'))
+    const selected = Array.from(e.target.files || [])
+    const arr = selected.filter(isVideoFile)
+    if (selected.length > arr.length) toast.error('That video format is not supported. Use MP4, MOV, M4V, or WebM.')
     setFiles(prev => [...prev, ...arr])
+    e.target.value = ''
   }
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const arr = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'))
+    const selected = Array.from(e.target.files || [])
+    const arr = selected.filter(isImageFile)
+    if (selected.length > arr.length) toast.error('That photo format is not supported. Use JPG, PNG, WebP, HEIC, or HEIF.')
     setFiles(prev => [...prev, ...arr])
+    e.target.value = ''
   }
 
   // Separate files by type
-  const videoFiles = files.filter(f => f.type.startsWith('video/'))
-  const imageFiles = files.filter(f => f.type.startsWith('image/'))
+  const videoFiles = files.filter(isVideoFile)
+  const imageFiles = files.filter(isImageFile)
 
   const startUpload = async () => {
     if (files.length === 0) return
     setUploading(true)
+    setUploadProgress(0)
     try {
-      // Upload videos one by one (existing behavior)
-      for (const file of videoFiles) {
-        const fd = new FormData()
-        fd.append('video', file)
-        fd.append('settings', JSON.stringify(settings))
-        const res = await fetch('/api/videos', { method: 'POST', body: fd })
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          throw new Error(err.error || `Upload failed for ${file.name}`)
-        }
-      }
-
-      // Upload all images together as a single slideshow (new behavior)
-      if (imageFiles.length > 0) {
-        const fd = new FormData()
-        for (const img of imageFiles) {
-          fd.append('images', img)
-        }
-        fd.append('settings', JSON.stringify({
+      const batches: { files: File[]; settings: Record<string, unknown> }[] = videoFiles.map(file => ({ files: [file], settings }))
+      if (imageFiles.length) batches.push({
+        files: imageFiles,
+        settings: {
           perImageSec: settings.perImageSec,
           transitionSec: settings.transitionSec,
           burnCaptions: settings.burnCaptions,
@@ -96,18 +155,66 @@ export function Upload() {
           watermarkPosition: settings.watermarkPosition,
           watermarkOpacity: settings.watermarkOpacity,
           watermarkScale: settings.watermarkScale,
-        }))
-        const res = await fetch('/api/videos', { method: 'POST', body: fd })
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          throw new Error(err.error || `Image upload failed`)
+        },
+      })
+
+      const supabase = createClient()
+      let uploadedBytes = 0
+      const totalBytes = files.reduce((sum, file) => sum + file.size, 0)
+      for (const batch of batches) {
+        const start = await fetch('/api/uploads/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: batch.files.map(file => ({ name: file.name, type: uploadContentType(file), size: file.size })), settings: batch.settings }),
+        })
+        if (start.status === 401) {
+          window.location.assign('/login?error=Your%20session%20expired.%20Log%20in%20again%20to%20upload.')
+          return
         }
-        toast.success(`${imageFiles.length} image(s) → slideshow queued!`)
+        const prepared = await start.json()
+        if (!start.ok) throw new Error(prepared.error || 'Could not start the upload')
+
+        for (let index = 0; index < prepared.uploads.length; index += 1) {
+          const target = prepared.uploads[index]
+          const sourceFile = batch.files[target.fileIndex ?? index]
+          const uploadFile = target.start === 0 && target.end === sourceFile.size
+            ? sourceFile
+            : new File([sourceFile.slice(target.start, target.end)], sourceFile.name, {
+                type: uploadContentType(sourceFile),
+                lastModified: sourceFile.lastModified,
+              })
+          try {
+            await uploadResumable(supabase, uploadFile, target.path, (bytesUploaded) => {
+              setUploadProgress(Math.round(((uploadedBytes + bytesUploaded) / totalBytes) * 100))
+            })
+          } catch (resumableError) {
+            console.warn('Resumable upload failed; trying signed upload.', resumableError)
+            const { error: signedError } = await supabase.storage.from('content-media').uploadToSignedUrl(
+              target.path,
+              target.token,
+              uploadFile,
+              { contentType: uploadContentType(sourceFile) },
+            )
+            if (signedError) throw new Error(`Upload failed for ${sourceFile.name}: ${signedError.message}`)
+          }
+          uploadedBytes += uploadFile.size
+          setUploadProgress(Math.round((uploadedBytes / totalBytes) * 100))
+        }
+
+        const complete = await fetch('/api/uploads/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemId: prepared.itemId }),
+        })
+        if (complete.status === 401) {
+          window.location.assign('/login?error=Your%20session%20expired.%20Log%20in%20again%20to%20finish%20the%20upload.')
+          return
+        }
+        const completed = await complete.json()
+        if (!complete.ok) throw new Error(completed.error || 'The upload finished but could not be queued')
       }
 
-      if (videoFiles.length > 0) {
-        toast.success(`${videoFiles.length} video(s) queued for processing`)
-      }
+      toast.success(`${files.length} file(s) uploaded safely and queued`)
 
       setFiles([])
       queryClient.invalidateQueries({ queryKey: ['videos'] })
@@ -116,6 +223,7 @@ export function Upload() {
       toast.error(err.message)
     } finally {
       setUploading(false)
+      setUploadProgress(0)
     }
   }
 
@@ -125,31 +233,31 @@ export function Upload() {
       <p className="text-sm text-neutral-500 mb-4">Upload videos OR photos. Photos are auto-converted to a video with Ken Burns effect, voiceover, captions, and music.</p>
 
       {/* Drop zone */}
-      <div
+      <label
+        htmlFor="content-video-upload"
         onDrop={handleDrop}
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
-        onClick={() => fileInput.current?.click()}
         className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-colors ${
           dragging ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30' : 'border-neutral-300 dark:border-neutral-700 hover:border-neutral-400 dark:hover:border-neutral-600'
         }`}
       >
-        <input ref={fileInput} type="file" accept="video/*" multiple className="hidden" onChange={handleVideoSelect} />
-        <input ref={imageInput} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelect} />
+        <input id="content-video-upload" type="file" accept="video/*,.mp4,.mov,.m4v,.webm" multiple className="sr-only" onChange={handleVideoSelect} />
         <UploadCloud className="size-10 mx-auto text-neutral-400 mb-2" />
-        <p className="text-sm font-medium">{dragging ? 'Drop files here' : 'Click or drag videos here'}</p>
+        <p className="text-sm font-medium">{dragging ? 'Drop files here' : 'Choose a video from this device'}</p>
         <p className="text-xs text-neutral-500 mt-1">MP4, MOV, WebM — multiple files allowed</p>
-      </div>
+      </label>
 
       {/* Image upload button (separate) */}
       <div className="mt-3 flex justify-center">
-        <button
-          onClick={() => imageInput.current?.click()}
+        <input id="content-image-upload" type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" multiple className="sr-only" onChange={handleImageSelect} />
+        <label
+          htmlFor="content-image-upload"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-purple-300 text-purple-700 dark:text-purple-300 text-sm font-medium hover:bg-purple-50 dark:hover:bg-purple-900/20"
         >
           <ImageIcon className="size-4" />
           Upload Photos Instead
-        </button>
+        </label>
         <span className="text-xs text-neutral-500 self-center ml-3">→ becomes a video with voiceover + music + captions</span>
       </div>
 
@@ -291,7 +399,7 @@ export function Upload() {
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-500 text-white text-sm font-semibold disabled:opacity-50"
         >
           {uploading ? <Loader2 className="size-4 animate-spin" /> : <UploadCloud className="size-4" />}
-          {uploading ? 'Uploading…' : `Upload ${files.length} file(s)`}
+          {uploading ? `Uploading… ${uploadProgress}%` : `Upload ${files.length} file(s)`}
         </button>
       </div>
     </div>
@@ -315,7 +423,7 @@ function FileRow({ file, icon: Icon, onRemove, preview }: { file: File; icon: an
         )}
         <div className="min-w-0">
           <p className="text-sm font-medium truncate">{file.name}</p>
-          <p className="text-xs text-neutral-500">{(file.size / 1024 / 1024).toFixed(1)} MB · {file.type.startsWith('video/') ? 'Video' : 'Photo'}</p>
+          <p className="text-xs text-neutral-500">{(file.size / 1024 / 1024).toFixed(1)} MB · {isVideoFile(file) ? 'Video' : 'Photo'}</p>
         </div>
       </div>
       <button onClick={onRemove} className="text-neutral-400 hover:text-red-600">

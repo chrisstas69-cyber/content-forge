@@ -2,7 +2,12 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { randomUUID } from 'crypto'
 
-const UPLOAD_ROOT = path.join(process.cwd(), 'uploads')
+// Vercel's deployed application directory is read-only. Use its writable
+// ephemeral filesystem for controlled preview testing only.
+const UPLOAD_ROOT =
+  process.env.VERCEL === '1'
+    ? path.join('/tmp', 'content-forge', 'uploads')
+    : path.join(process.cwd(), 'uploads')
 const ORIGINALS_DIR = path.join(UPLOAD_ROOT, 'originals')
 const PROCESSED_DIR = path.join(UPLOAD_ROOT, 'processed')
 const THUMBNAILS_DIR = path.join(UPLOAD_ROOT, 'thumbnails')

@@ -1,0 +1,4 @@
+'use client'
+import { useState } from 'react'
+
+export function CheckoutButton({ plan, children }: { plan: 'creator' | 'pro'; children: React.ReactNode }) { const [loading, setLoading] = useState(false); return <button disabled={loading} onClick={async () => { setLoading(true); const response = await fetch('/api/billing/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan }) }); const data = await response.json(); if (response.status === 401) location.href = '/signup'; else if (data.url) location.href = data.url; else { alert(data.error || 'Checkout could not start'); setLoading(false) } }} className="w-full rounded-lg bg-orange-500 px-4 py-3 font-semibold text-white hover:bg-orange-600 disabled:opacity-60">{loading ? 'Opening checkout…' : children}</button> }

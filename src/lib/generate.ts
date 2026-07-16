@@ -1,21 +1,145 @@
 import { getZai } from '@/lib/ai'
 import { promises as fs } from 'fs'
-import path from 'path'
-import { randomUUID } from 'crypto'
-import { db } from '@/lib/db'
 import { getSecret } from '@/lib/secrets'
-import { getDirs, ensureDirs } from '@/lib/storage'
+import { ensureDirs } from '@/lib/storage'
 
-// ---- ZAI Image Generation (built-in, no API key needed) ----
+// ---- Production image generation ----
 export async function generateImage(prompt: string, size: string = '1024x1024'): Promise<Buffer> {
-  const zai = await getZai()
-  const response: any = await zai.images.generations.create({
-    prompt,
-    size,
-  })
-  const imageBase64 = response.data?.[0]?.base64
-  if (!imageBase64) throw new Error('Image generation returned no data')
-  return Buffer.from(imageBase64, 'base64')
+  const errors: string[] = []
+  const openaiKey = await getSecret('openai.api_key')
+
+  // The ZAI SDK is only available inside its original sandbox. Production runs
+  // on Vercel, so use the customer's configured image provider there.
+  if (openaiKey) {
+    try {
+      const openaiSize = size === '1792x1024' ? '1536x1024' : size
+      const res = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-image-2',
+          prompt,
+          size: openaiSize,
+          output_format: 'png',
+        }),
+      })
+      const body: any = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error?.message || `OpenAI returned ${res.status}`)
+      const imageBase64 = body.data?.[0]?.b64_json
+      if (imageBase64) return Buffer.from(imageBase64, 'base64')
+      const imageUrl = body.data?.[0]?.url
+      if (imageUrl) {
+        const imageRes = await fetch(imageUrl)
+        if (!imageRes.ok) throw new Error(`Image download returned ${imageRes.status}`)
+        return Buffer.from(await imageRes.arrayBuffer())
+      }
+      throw new Error('OpenAI returned no image data')
+    } catch (err: any) {
+      errors.push(`OpenAI: ${err?.message || String(err)}`)
+    }
+  }
+
+  const geminiKey = await getSecret('gemini.api_key')
+  if (geminiKey) {
+    try {
+      const res = await fetch('https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent', {
+        method: 'POST',
+        headers: {
+          'x-goog-api-key': geminiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      })
+      const body: any = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error?.message || `Gemini returned ${res.status}`)
+      const parts = body?.candidates?.[0]?.content?.parts || []
+      const imagePart = parts.find((part: any) => part.inlineData?.data || part.inline_data?.data)
+      const imageBase64 = imagePart?.inlineData?.data || imagePart?.inline_data?.data
+      if (!imageBase64) throw new Error('Gemini returned no image data')
+      return Buffer.from(imageBase64, 'base64')
+    } catch (err: any) {
+      errors.push(`Gemini: ${err?.message || String(err)}`)
+    }
+  }
+
+  const openrouterKey = await getSecret('openrouter.api_key')
+  if (openrouterKey) {
+    try {
+      const aspectRatio = size === '1792x1024' || size === '1536x1024' ? '16:9' : '1:1'
+      const res = await fetch('https://openrouter.ai/api/v1/images', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openrouterKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://content-forge-sepia.vercel.app',
+          'X-Title': 'ContentForge',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-3.1-flash-image',
+          prompt,
+          aspect_ratio: aspectRatio,
+          output_format: 'png',
+        }),
+      })
+      const body: any = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error?.message || `OpenRouter returned ${res.status}`)
+      const imageBase64 = body?.data?.[0]?.b64_json
+      if (!imageBase64) throw new Error('OpenRouter returned no image data')
+      return Buffer.from(imageBase64, 'base64')
+    } catch (err: any) {
+      errors.push(`OpenRouter: ${err?.message || String(err)}`)
+    }
+  }
+
+  const replicateToken = await getSecret('replicate.api_token')
+  if (replicateToken) {
+    try {
+      const aspectRatio = size === '1792x1024' || size === '1536x1024' ? '16:9' : '1:1'
+      const res = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${replicateToken}`,
+          'Content-Type': 'application/json',
+          Prefer: 'wait=60',
+        },
+        body: JSON.stringify({ input: { prompt, aspect_ratio: aspectRatio, output_format: 'png' } }),
+      })
+      const prediction: ReplicatePrediction & { detail?: string } = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(prediction.detail || prediction.error || `Replicate returned ${res.status}`)
+      const final = prediction.status === 'succeeded'
+        ? prediction
+        : await pollReplicatePrediction(prediction.urls.get)
+      const output = Array.isArray(final.output) ? final.output[0] : final.output
+      if (!output) throw new Error('Replicate returned no image URL')
+      const imageRes = await fetch(output)
+      if (!imageRes.ok) throw new Error(`Image download returned ${imageRes.status}`)
+      return Buffer.from(await imageRes.arrayBuffer())
+    } catch (err: any) {
+      errors.push(`Replicate: ${err?.message || String(err)}`)
+    }
+  }
+
+  // Keep the sandbox provider as a development fallback when it is present.
+  try {
+    const zai = await getZai()
+    if (zai?.images?.generations?.create) {
+      const response: any = await zai.images.generations.create({ prompt, size })
+      const imageBase64 = response.data?.[0]?.base64 || response.data?.[0]?.b64_json
+      if (imageBase64) return Buffer.from(imageBase64, 'base64')
+    }
+  } catch (err: any) {
+    errors.push(`Sandbox AI: ${err?.message || String(err)}`)
+  }
+
+  if (!openaiKey && !geminiKey && !openrouterKey && !replicateToken) {
+    throw new Error('AI image generation needs an OpenAI, Gemini, OpenRouter, or Replicate API key. Add one in Settings → API Keys.')
+  }
+  throw new Error(`AI image generation failed. ${errors.join(' | ')}`)
 }
 
 // ---- Replicate Video Generation ----
@@ -35,24 +159,23 @@ interface ReplicatePrediction {
   urls: { get: string; cancel: string }
 }
 
-async function createReplicatePrediction(model: string, input: any): Promise<ReplicatePrediction> {
+async function createOfficialReplicatePrediction(model: string, input: any): Promise<ReplicatePrediction> {
   const token = await getSecret('replicate.api_token')
   if (!token) throw new Error('Replicate API token not set. Add it in Settings → API Keys.')
-
-  const res = await fetch('https://api.replicate.com/v1/predictions', {
+  const [owner, name] = model.split('/')
+  if (!owner || !name) throw new Error(`Invalid Replicate model: ${model}`)
+  const res = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}/predictions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
-      Prefer: 'wait=10', // wait up to 10 seconds for result
+      Prefer: 'wait=60',
     },
-    body: JSON.stringify({ version: model, input }),
+    body: JSON.stringify({ input }),
   })
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Replicate API error: ${err}`)
-  }
-  return await res.json()
+  const prediction: ReplicatePrediction & { detail?: string } = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(prediction.detail || prediction.error || `Replicate returned ${res.status}`)
+  return prediction
 }
 
 async function pollReplicatePrediction(predictionUrl: string): Promise<ReplicatePrediction> {
@@ -73,39 +196,25 @@ async function pollReplicatePrediction(predictionUrl: string): Promise<Replicate
 
 // Text-to-video using Stable Video Diffusion (image-to-video) or AnimateDiff (text-to-video)
 export async function generateVideoFromText(prompt: string, opts: { duration?: number } = {}): Promise<{ url: string; model: string }> {
-  // First, generate a starting image with ZAI
-  const imageBuffer = await generateImage(prompt, '1024x1024')
-  const { assets } = getDirs()
-  await ensureDirs()
-  const imagePath = path.join(assets, `s2v_${randomUUID()}.png`)
-  await fs.writeFile(imagePath, imageBuffer)
-
-  // Upload image to Replicate (they need a URL or data URI)
-  // For simplicity, we'll use the data URI approach
-  const dataUri = `data:image/png;base64,${imageBuffer.toString('base64')}`
-
-  // Stable Video Diffusion model
-  const model = 'stable-video-diffusion:3f127a68c07c6c6d3c5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5'
-  // Use a simpler text-to-video model
-  const prediction = await createReplicatePrediction(
-    'cjwbw/stable-video-diffusion:3f127a68c07c6c6d3c5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5',
-    {
-      image: dataUri,
-      video_length: opts.duration || 14,
-      sizing_strategy: 'maintain_aspect_ratio',
-      frames_per_second: 7,
-    }
-  )
+  const duration = Math.min(12, Math.max(2, opts.duration || 5))
+  const prediction = await createOfficialReplicatePrediction('bytedance/seedance-1-pro', {
+    prompt,
+    duration,
+    resolution: '480p',
+    aspect_ratio: '16:9',
+    fps: 24,
+    camera_fixed: false,
+  })
 
   if (prediction.status === 'succeeded') {
     const output = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
-    return { url: output, model: 'stable-video-diffusion' }
+    return { url: output, model: 'seedance-1-pro' }
   }
 
   // Poll for completion
   const final = await pollReplicatePrediction(prediction.urls.get)
   const output = Array.isArray(final.output) ? final.output[0] : final.output
-  return { url: output, model: 'stable-video-diffusion' }
+  return { url: output, model: 'seedance-1-pro' }
 }
 
 // Generate a thumbnail for a video (text-to-image with overlay-ready composition)
@@ -126,25 +235,80 @@ Aspect ratio: 16:9 horizontal.`
 export async function generateThumbnailFromImage(
   imageBuffer: Buffer,
   prompt: string,
-  opts: { promptStrength?: number; niche?: string } = {},
+  opts: { promptStrength?: number; niche?: string; mimeType?: string } = {},
 ): Promise<{ url: string; model: string }> {
-  const token = await getSecret('replicate.api_token')
-  if (!token) throw new Error('Replicate API token not set. Add it in Settings → API Keys.')
-
   const promptStrength = opts.promptStrength ?? 0.35
-  const dataUri = `data:image/png;base64,${imageBuffer.toString('base64')}`
+  const mimeType = opts.mimeType || 'image/png'
+  const dataUri = `data:${mimeType};base64,${imageBuffer.toString('base64')}`
 
   const fullPrompt = `${prompt}. Social media thumbnail style, bold, eye-catching, high contrast, professional. ${opts.niche ? `Niche: ${opts.niche}.` : ''}`
 
+  const geminiKey = await getSecret('gemini.api_key')
+  if (geminiKey) {
+    try {
+      const res = await fetch('https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent', {
+        method: 'POST',
+        headers: { 'x-goog-api-key': geminiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { text: `${fullPrompt} Preserve the main subject and composition. Style strength: ${Math.round(promptStrength * 100)}%.` },
+            { inlineData: { mimeType, data: imageBuffer.toString('base64') } },
+          ] }],
+        }),
+      })
+      const body: any = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error?.message || `Gemini returned ${res.status}`)
+      const parts = body?.candidates?.[0]?.content?.parts || []
+      const imagePart = parts.find((part: any) => part.inlineData?.data || part.inline_data?.data)
+      const imageBase64 = imagePart?.inlineData?.data || imagePart?.inline_data?.data
+      const responseMimeType = imagePart?.inlineData?.mimeType || imagePart?.inline_data?.mime_type || 'image/png'
+      if (imageBase64) return { url: `data:${responseMimeType};base64,${imageBase64}`, model: 'gemini-3.1-flash-image' }
+    } catch (err) {
+      console.error('Gemini image editing failed; trying Replicate:', err)
+    }
+  }
+
+  const openrouterKey = await getSecret('openrouter.api_key')
+  if (openrouterKey) {
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/images', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openrouterKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://content-forge-sepia.vercel.app',
+          'X-Title': 'ContentForge',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-3.1-flash-image',
+          prompt: `${fullPrompt} Preserve the main subject and composition.`,
+          aspect_ratio: '16:9',
+          output_format: 'png',
+          input_references: [{ type: 'image_url', image_url: { url: dataUri } }],
+        }),
+      })
+      const body: any = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error?.message || `OpenRouter returned ${res.status}`)
+      const imageBase64 = body?.data?.[0]?.b64_json
+      if (imageBase64) return { url: `data:image/png;base64,${imageBase64}`, model: 'openrouter-gemini-image' }
+    } catch (err) {
+      console.error('OpenRouter image editing failed; trying Replicate:', err)
+    }
+  }
+
+  const token = await getSecret('replicate.api_token')
+  if (!token) throw new Error('Gemini image editing failed and no Replicate API token is available.')
+
   // SDXL img2img — takes an init_image and transforms it based on the prompt
-  const prediction = await createReplicatePrediction(
-    'stability-ai/sdxl:2b017d9b67edd2ee1401238df49d75da53c523f36e363881e7310ecc18f1d39c',
+  const prediction = await createOfficialReplicatePrediction(
+    'black-forest-labs/flux-dev',
     {
       image: dataUri,
       prompt: fullPrompt,
       prompt_strength: promptStrength,
       num_outputs: 1,
       aspect_ratio: '16:9',
+      output_format: 'png',
     },
   )
 
@@ -154,7 +318,7 @@ export async function generateThumbnailFromImage(
   }
 
   const output = Array.isArray(finalPrediction.output) ? finalPrediction.output[0] : finalPrediction.output
-  return { url: output, model: 'sdxl-img2img' }
+  return { url: output, model: 'flux-dev-img2img' }
 }
 
 // Download a file from URL to local storage

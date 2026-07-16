@@ -42,12 +42,6 @@ export function decrypt(payload: string): string {
   return dec.toString('utf8')
 }
 
-export function mask(value: string): string {
-  if (!value) return ''
-  if (value.length <= 8) return '•'.repeat(value.length)
-  return value.slice(0, 4) + '•'.repeat(Math.max(4, value.length - 8)) + value.slice(-4)
-}
-
 // ---- Secret schema definitions ----
 // Each platform has a set of required credentials.
 export interface SecretField {
@@ -85,7 +79,7 @@ export const PLATFORM_GROUPS: { id: string; label: string; description: string; 
   { id: 'tiktok', label: 'TikTok', description: 'TikTok Developers app with video.upload + video.publish scopes', helpUrl: 'https://developers.tiktok.com/app/quickstart' },
   { id: 'meta', label: 'Instagram + Facebook', description: 'One Meta app powers both Instagram and Facebook publishing', helpUrl: 'https://developers.facebook.com/apps/' },
   { id: 'x', label: 'X (Twitter)', description: 'Twitter Developer Portal project with OAuth 2.0', helpUrl: 'https://developer.twitter.com/en/portal/dashboard' },
-  { id: 'replicate', label: 'Replicate (AI Video Gen)', description: 'Optional — for AI text-to-video B-roll generation. Images use built-in AI (no key needed).', helpUrl: 'https://replicate.com/account/api-tokens' },
+  { id: 'replicate', label: 'Replicate (AI Video Gen)', description: 'Used for AI B-roll video and as a fallback image provider.', helpUrl: 'https://replicate.com/account/api-tokens' },
   { id: 'llm', label: 'AI Language Models (LLMs)', description: 'Optional — custom LLM key. If set, text generation, video analysis, and AI replies will run via your account instead of the sandbox SDK.', helpUrl: 'https://platform.openai.com/' },
 ]
 
@@ -93,13 +87,19 @@ export const PLATFORM_GROUPS: { id: string; label: string; description: string; 
 // Returns the decrypted secret value, or undefined if not set.
 // Falls back to process.env for backwards compatibility (so users can still use .env if they prefer).
 export async function getSecret(id: string): Promise<string | undefined> {
-  const row = await db.appSecret.findUnique({ where: { id } })
-  if (row) {
-    try {
-      return decrypt(row.cipherText)
-    } catch (err) {
-      console.error(`Failed to decrypt secret ${id}:`, err)
+  try {
+    const row = await db.appSecret.findUnique({ where: { id } })
+    if (row) {
+      try {
+        return decrypt(row.cipherText)
+      } catch (err) {
+        console.error(`Failed to decrypt secret ${id}:`, err)
+      }
     }
+  } catch (err) {
+    // Environment variables remain a valid production configuration even if
+    // the optional legacy secrets table is temporarily unavailable.
+    console.error(`Could not read stored secret ${id}; checking environment fallback:`, err)
   }
   // Fallback: read from process.env (snake_case version of the id)
   const envKey = id.toUpperCase().replace(/\./g, '_')
@@ -123,7 +123,7 @@ export async function deleteSecret(id: string): Promise<void> {
   await db.appSecret.delete({ where: { id } }).catch(() => {})
 }
 
-export async function listSecrets(): Promise<{ id: string; label: string; platform: string; hasValue: boolean; preview: string; updatedAt: Date }[]> {
+export async function listSecrets(): Promise<{ id: string; label: string; platform: string; hasValue: boolean; updatedAt: Date }[]> {
   const rows = await db.appSecret.findMany()
   return rows.map(r => {
     let value = ''
@@ -133,7 +133,6 @@ export async function listSecrets(): Promise<{ id: string; label: string; platfo
       label: r.label,
       platform: r.platform,
       hasValue: !!value,
-      preview: mask(value),
       updatedAt: r.updatedAt,
     }
   })

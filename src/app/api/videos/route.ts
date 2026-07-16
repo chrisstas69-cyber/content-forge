@@ -6,6 +6,8 @@ import { processImagePipeline, ImageEditSettings } from '@/lib/image-pipeline'
 import path from 'path'
 import { promises as fs } from 'fs'
 import { randomUUID } from 'crypto'
+import { createClient } from '@/lib/supabase/server'
+import { serializeContentItem, ContentItemRow } from '@/lib/content-items'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -127,8 +129,16 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  const videos = await db.video.findMany({ orderBy: { createdAt: 'desc' }, take: 100 })
-  return NextResponse.json({ videos: videos.map(serializeVideo) })
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  const { data, error } = await supabase.from('content_items').select('*').order('created_at', { ascending: false }).limit(100)
+  if (error) {
+    console.error('Content library failed:', error)
+    return NextResponse.json({ error: 'The media library is not ready. Apply the latest Supabase migration.' }, { status: 503 })
+  }
+  const libraryItems = (data as ContentItemRow[]).filter(item => item.metadata?.source !== 'ai-generation')
+  return NextResponse.json({ videos: libraryItems.map(serializeContentItem) })
 }
 
 function serializeVideo(v: any) {

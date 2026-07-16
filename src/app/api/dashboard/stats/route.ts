@@ -1,47 +1,47 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 
+function databaseErrorHint(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+
+  if (/P1001|Can't reach database server|ECONNREFUSED|connection/i.test(message)) {
+    return 'The database cannot be reached. Check DATABASE_URL, URL-encode reserved password characters, and redeploy.'
+  }
+
+  if (/P2021|does not exist|relation .* does not exist/i.test(message)) {
+    return 'The ContentForge database tables are missing. For a controlled preview migration, set RUN_LEGACY_DB_PUSH=true for one intentional Vercel deployment, review the build log, then remove the flag.'
+  }
+
+  return 'The dashboard database request failed. Open /api/dashboard/health for a safe readiness report and check the Vercel function log.'
+}
+
 export async function GET() {
-  const total = await db.video.count()
-  const ready = await db.video.count({ where: { status: 'ready' } })
-  const published = await db.video.count({ where: { status: 'published' } })
-  const failed = await db.video.count({ where: { status: 'failed' } })
-  const processing = await db.video.count({ where: { status: { in: ['pending', 'editing', 'transcribing', 'scoring'] } } })
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    const { data: items, error } = await supabase.from('content_items').select('status, metadata, created_at')
+    if (error) throw error
+    const rows = (items || []).filter(row => (row.metadata as any)?.source !== 'ai-generation')
+    const scores = rows.map(row => Number((row.metadata as any)?.viralScore)).filter(Number.isFinite)
 
-  const accounts = await db.socialAccount.findMany({ where: { connected: true } })
-  const posts = await db.post.count()
-  const publishedPosts = await db.post.count({ where: { status: 'published' } })
-
-  // Average viral score
-  const all = await db.video.findMany({ where: { viralScore: { not: null } }, select: { viralScore: true } })
-  const avgScore = all.length > 0 ? Math.round(all.reduce((a, v) => a + (v.viralScore || 0), 0) / all.length) : 0
-
-  // Recent activity (last 7 days)
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-  const recentVideos = await db.video.count({ where: { createdAt: { gte: sevenDaysAgo } } })
-
-  // Scheduled posts
-  const scheduled = await db.post.count({ where: { status: 'scheduled' } })
-  const totalFormats = await db.video.count({ where: { NOT: { processedFormats: null } } })
-
-  return NextResponse.json({
-    total,
-    ready,
-    published,
-    failed,
-    processing,
-    connectedAccounts: accounts.length,
-    accountsByPlatform: accounts.reduce((acc: Record<string, number>, a) => {
-      acc[a.platform] = (acc[a.platform] || 0) + 1
-      return acc
-    }, {}),
-    totalPosts: posts,
-    publishedPosts,
-    avgViralScore: avgScore,
-    recentVideos,
-    scheduled,
-    totalFormats,
-  })
+    return NextResponse.json({
+      total: rows.length,
+      ready: rows.filter(row => row.status === 'ready').length,
+      published: 0,
+      failed: rows.filter(row => row.status === 'failed').length,
+      processing: rows.filter(row => ['uploading','queued','processing'].includes(row.status)).length,
+      connectedAccounts: 0, accountsByPlatform: {}, totalPosts: 0, publishedPosts: 0,
+      avgViralScore: scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0,
+      recentVideos: rows.filter(row => new Date(row.created_at) >= sevenDaysAgo).length,
+      scheduled: 0,
+      totalFormats: rows.filter(row => row.status === 'ready').length,
+    })
+  } catch (error) {
+    console.error('Dashboard stats failed:', error)
+    return NextResponse.json({ error: databaseErrorHint(error) }, { status: 503 })
+  }
 }

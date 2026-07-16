@@ -20,25 +20,16 @@ export const metadata: Metadata = {
   keywords: ["content automation", "AI video editing", "social media scheduler", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
   authors: [{ name: "ContentForge" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/logo.svg",
+    apple: "/logo.svg",
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "ContentForge",
   },
-  openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-  },
+  robots: { index: false, follow: false, noarchive: true },
+  referrer: 'strict-origin-when-cross-origin',
 };
 
 export default function RootLayout({
