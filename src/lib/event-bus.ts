@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
 
 export interface JobEvent {
-  type: 'video.status' | 'video.progress' | 'job.update' | 'post.update' | 'log'
+  type: 'video.status' | 'video.progress' | 'job.update' | 'post.update' | 'agent.tool_used' | 'log'
   videoId?: string
   jobId?: string
   postId?: string

@@ -6,6 +6,9 @@ export const runtime = 'nodejs'
 
 export async function GET(req: NextRequest) {
   const file = req.nextUrl.searchParams.get('file') || 'ContentForge-Complete-Guide-v2.docx'
+  if (file !== path.basename(file) || !file.endsWith('.docx')) {
+    return NextResponse.json({ error: 'Invalid filename' }, { status: 400 })
+  }
   const filepath = path.join(process.cwd(), 'download', file)
 
   try {
