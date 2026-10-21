@@ -323,6 +323,7 @@ function VideoCard({ v }: { v: any }) {
   const statuses: Record<string, string> = {
     draft: 'bg-neutral-100 text-neutral-500 border border-dashed border-neutral-300 dark:border-neutral-700',
     pending: 'bg-neutral-100 text-neutral-700',
+    processing: 'bg-blue-100 text-blue-700',
     editing: 'bg-blue-100 text-blue-700',
     transcribing: 'bg-blue-100 text-blue-700',
     scoring: 'bg-purple-100 text-purple-700',
@@ -418,7 +419,7 @@ function VideoCard({ v }: { v: any }) {
               </span>
             )}
           </div>
-          {(v.status === 'editing' || v.status === 'transcribing' || v.status === 'scoring') && (
+          {['pending', 'processing', 'editing', 'transcribing', 'scoring'].includes(v.status) && (
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-neutral-200">
               <div className="h-full bg-blue-500 transition-all" style={{ width: `${v.progress}%` }} />
             </div>
@@ -452,6 +453,11 @@ function VideoCard({ v }: { v: any }) {
       </div>
       <div className="p-3 pt-0">
         <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-neutral-100 dark:border-neutral-800">
+          {v.status === 'ready' && v.processedUrl && (
+            <a href={v.processedUrl} download className="px-3 py-1.5 text-xs font-medium rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+              Download
+            </a>
+          )}
           {v.status === 'draft' && (
             <button 
               onClick={() => fileInputRef.current?.click()} 
