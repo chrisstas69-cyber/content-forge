@@ -72,6 +72,30 @@ async function main(){
     assert.equal((await proxy(request('/api/comments','test-cron-secret','POST'))).status,401)
     delete process.env.NEXT_PUBLIC_SUPABASE_URL
     assert.equal((await proxy(request('/api/videos'))).status,503)
+    process.env.NEXT_PUBLIC_SUPABASE_URL='https://example.supabase.co'
+    process.env.SUPABASE_SERVICE_ROLE_KEY='test-service-key'
+    process.env.CONTENT_WORKER_TOKEN='test-worker-token'
+    process.env.VERCEL_ENV='preview'
+    process.env.TEST_MODE_ENABLED='true'
+    const jobId='11111111-1111-4111-8111-111111111111', itemId='22222222-2222-4222-8222-222222222222'
+    const dbJob={id:jobId,content_item_id:itemId,status:'running',locked_by:'test-worker'}
+    let writes=0
+    const worker=load('src/app/api/worker/route.ts',{'next/server':{NextResponse},'@supabase/supabase-js':{createClient:()=>({rpc:async()=>({data:[],error:null}),from:table=>({select:()=>({eq:()=>({single:async()=>({data:table==='processing_jobs'?dbJob:{user_id:'user',workspace_id:'workspace'}})})}),update:()=>({eq:async()=>{writes++;return {error:null}}})})})}}).POST
+    const workerRequest=(body,token='test-worker-token')=>new Request('https://app.example/api/worker',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify(body)})
+    const update={action:'update',workerId:'test-worker',jobId,table:'content_items',id:itemId,values:{progress:30}}
+    assert.equal((await worker(workerRequest({action:'claim',workerId:'test-worker'}))).status,200)
+    assert.equal((await worker(workerRequest(update,'wrong-token'))).status,401)
+    assert.equal((await worker(workerRequest({...update,workerId:'another-worker'}))).status,403)
+    assert.equal((await worker(workerRequest({...update,id:jobId}))).status,403)
+    assert.equal((await worker(workerRequest({...update,values:{user_id:'another-user'}}))).status,400)
+    assert.equal((await worker(workerRequest({...update,values:{output_path:'another-user/output.mp4'}}))).status,400)
+    assert.equal(writes,0)
+    assert.equal((await worker(workerRequest(update))).status,200)
+    assert.equal(writes,1)
+    process.env.VERCEL_ENV='production'
+    assert.equal((await worker(workerRequest(update))).status,404)
+    console.log('PASS: worker bridge rejects wrong tokens, foreign jobs, arbitrary fields and paths; disabled in production.')
+
   }finally{for(const key of Object.keys(process.env))if(!(key in savedEnv))delete process.env[key];Object.assign(process.env,savedEnv)}
   console.log('PASS: proxy blocks anonymous data access and wrong cron tokens; valid cron tokens work only for scheduled GET routes; missing auth config returns JSON 503.')
   console.log('PASS: download traversal blocked; valid guide served; login/signup preserve passwords; readiness detects missing, healthy, unhealthy, unreachable workers.')

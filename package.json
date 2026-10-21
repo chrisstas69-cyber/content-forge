@@ -6,6 +6,8 @@
     "dev": "next dev -p 3000",
     "build": "node ./scripts/prepare-db.js && next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "node .next/standalone/server.js",
+    "worker:local": "node --env-file=.env.worker.local worker/src/index.mjs",
+    "test:checkup": "node scripts/checkup.test.cjs",
     "lint": "eslint .",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
