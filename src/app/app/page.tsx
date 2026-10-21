@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useSyncExternalStore } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Upload } from '@/components/dashboard/upload'
 import { Dashboard } from '@/components/dashboard'
@@ -176,13 +176,11 @@ export default function Home() {
 import { LayoutDashboard, UploadCloud, Film, Share2, Settings as SettingsIcon, Image as ImageIcon, PawPrint, KeyRound, CalendarClock, TrendingUp, BarChart3, Sparkles, Lightbulb, Target, Wand2, Calendar as CalendarIcon, Palette, Sun, Moon, MessageCircle, Users, Mic, Menu, X, BookOpen, Loader2, Search, Layers, Download } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
+const subscribeToHydration = () => () => {}
+
 function ThemeToggle() {
   const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  const mounted = useSyncExternalStore(subscribeToHydration, () => true, () => false)
 
   if (!mounted) {
     return (
@@ -1011,8 +1009,11 @@ function Settings() {
     queryKey: ['settings'],
     queryFn: async () => (await fetch('/api/settings')).json(),
   })
-  const settings: Record<string, string> = data?.settings || {}
-  
+  if (isLoading) return <p role="status" className="text-sm text-neutral-500">Loading settings…</p>
+  return <SettingsForm settings={data?.settings || {}} />
+}
+
+function SettingsForm({ settings }: { settings: Record<string, string> }) {
   const [brandHandle, setBrandHandle] = useState(settings['brand.handle'] || '@yourhandle')
   const [niche, setNiche] = useState(settings['content.niche'] || 'dog / pet content')
   
@@ -1026,20 +1027,6 @@ function Settings() {
   const [analysisModel, setAnalysisModel] = useState(settings['llm.model.analysis'] || '')
   
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    if (!isLoading) {
-      setBrandHandle(settings['brand.handle'] || '@yourhandle')
-      setNiche(settings['content.niche'] || 'dog / pet content')
-      setProvider(settings['llm.provider'] || 'zai')
-      setOpenrouterModel(settings['llm.openrouter.model'] || 'google/gemini-2.5-flash')
-      setOpenaiModel(settings['llm.openai.model'] || 'gpt-4o-mini')
-      setGeminiModel(settings['llm.gemini.model'] || 'gemini-1.5-flash')
-      setIdeationModel(settings['llm.model.ideation'] || '')
-      setScriptsModel(settings['llm.model.scripts'] || '')
-      setAnalysisModel(settings['llm.model.analysis'] || '')
-    }
-  }, [isLoading, data])
 
   async function save() {
     setSaving(true)
