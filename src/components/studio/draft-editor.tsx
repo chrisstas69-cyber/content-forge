@@ -54,7 +54,9 @@ export function DraftEditor({
       caption: draft.caption,
       variants: draft.variants,
       destination_ids: draft.destination_ids,
-      scheduled_for: draft.scheduled_for,
+      scheduled_for: draft.scheduled_for
+        ? new Date(draft.scheduled_for).toISOString()
+        : null,
     });
   return (
     <section className="studio-panel studio-editor">

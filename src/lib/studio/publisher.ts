@@ -150,7 +150,13 @@ export async function submitDraft(
     const mediaItems: { type: string; url: string }[] = [];
     // Copy media into the publisher's storage before scheduling, so signed URLs cannot expire in its queue.
     for (const path of paths) {
-      const type = isVideo ? "video/mp4" : "image/jpeg";
+      const type = isVideo
+        ? "video/mp4"
+        : path.endsWith(".png")
+          ? "image/png"
+          : path.endsWith(".webp")
+            ? "image/webp"
+            : "image/jpeg";
       const presign = await publisherRequest(key, "/media/presign", {
         method: "POST",
         body: JSON.stringify({

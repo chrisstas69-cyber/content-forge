@@ -97,7 +97,8 @@ export function StudioSettings({
           </ul>
           <p className="studio-muted">
             AI runs only when you request a draft or transcription. Manual
-            drafts, editing, and exports work without paid AI.
+            drafts, editing, and exports work without paid AI. Daily workspace
+            limits: 20 AI requests and 20 minutes of speech transcription.
           </p>
           {data.owner && (
             <>

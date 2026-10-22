@@ -35,6 +35,7 @@ export function Studio() {
     [draftId, setDraftId] = useState<string | null>(null),
     [brief, setBrief] = useState(""),
     [hasPlan, setHasPlan] = useState(false);
+  const [uploadReset, setUploadReset] = useState(0);
   const plan = useRef<UploadPlan | null>(null),
     sequence = useRef(0);
   const refresh = useCallback(async () => {
@@ -127,6 +128,7 @@ export function Studio() {
       plan.current = null;
       setHasPlan(false);
       setFiles([]);
+      setUploadReset((n) => n + 1);
       setProgress(null);
     });
   if (!data || !brand)
@@ -198,6 +200,9 @@ export function Studio() {
               disabled={busy || hasPlan}
               onChange={(e) => {
                 setBrandId(e.target.value);
+                setBrief("");
+                setFiles([]);
+                setProgress(null);
                 setDraftId(null);
                 setEditorId(null);
               }}
@@ -292,6 +297,7 @@ export function Studio() {
                   <label className="studio-file-picker">
                     Choose videos or photos
                     <input
+                      key={`${brand.id}:${uploadReset}`}
                       aria-label="Choose videos or photos"
                       type="file"
                       accept="video/mp4,video/quicktime,video/webm,image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,.mov"

@@ -73,7 +73,13 @@ async function handle(req: NextRequest, route: RouteContext) {
     return NextResponse.json(
       {
         brands: results[0].data,
-        items: results[1].data,
+        items: results[1].data?.filter(
+          (item) =>
+            !(
+              item.metadata?.source === "ai-generation" &&
+              item.status === "failed"
+            ),
+        ),
         drafts: results[2].data,
         destinations: results[3].data,
         integrations: results[4].data,
@@ -306,6 +312,11 @@ async function handle(req: NextRequest, route: RouteContext) {
     const item = await scopedItem(ctx, "content_items", uuid.parse(id));
     if (item.status !== "ready" || !["video", "slideshow"].includes(item.kind))
       throw new StudioError("Process a video first.");
+    if (item.metadata?.hasAudio === false)
+      throw new StudioError(
+        "This video has no audio track. Enter subtitles manually if needed.",
+        422,
+      );
     const key = await integration(ctx, "deepgram");
     if (!key)
       throw new StudioError(

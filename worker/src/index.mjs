@@ -209,6 +209,7 @@ async function tick() {
       worker_id: workerId,
     });
     if (error) throw error;
+    lastError = null;
     activeJob = data?.[0] || null;
     if (activeJob) await processJob(activeJob);
   } catch (error) {
