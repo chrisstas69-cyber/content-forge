@@ -66,3 +66,6 @@ server.log
 # Shared chat data (temp files)
 shared_chat.json
 chat_text.txt
+
+# Supabase CLI local metadata
+/supabase/.temp/

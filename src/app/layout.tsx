@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ContentForge — AI Content Automation",
-  description: "Upload, auto-edit, score, and publish videos to all social media platforms. Includes AI agent, trend research, and analytics.",
+  title: "Content Forge — Your content studio",
+  description: "Prepare videos and photos, review brand-specific captions, and publish to selected social accounts.",
   keywords: ["content automation", "AI video editing", "social media scheduler", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
   authors: [{ name: "ContentForge" }],
   icons: {

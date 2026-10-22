@@ -31,7 +31,7 @@ async function main(){
   const originalFetch=global.fetch
   try{
     for(const key of envNames)process.env[key]='configured'
-    const health=load('src/app/api/dashboard/health/route.ts',{'next/server':{NextResponse},'@/lib/supabase/server':{createClient:async()=>({auth:{getUser:async()=>({data:{user:{id:'test-user'}}})},from:()=>({select:()=>({limit:async()=>({error:null})})}),storage:{from:()=>({list:async()=>({error:null})})}})}})
+    const health=load('src/app/api/dashboard/health/route.ts',{'next/server':{NextResponse},'@supabase/supabase-js':{createClient:()=>({from:()=>({select:()=>({order:()=>({limit:async()=>({data:[]})})})})})},'@/lib/supabase/server':{createClient:async()=>({auth:{getUser:async()=>({data:{user:{id:'test-user'}}})},from:()=>({select:()=>({limit:async()=>({error:null})})}),storage:{from:()=>({list:async()=>({error:null})})}})}})
     delete process.env.CONTENT_WORKER_URL
     assert.equal((await health.GET()).status,503)
     process.env.CONTENT_WORKER_URL='https://worker.example'
@@ -66,7 +66,7 @@ async function main(){
     const proxy=load('src/proxy.ts',{'next/server':{NextResponse},'@supabase/ssr':{createServerClient:()=>({auth:{getUser:async()=>({data:{user:null}})}})}}).proxy
     const request=(pathname,token,method='GET')=>({method,nextUrl:new URL('https://app.example'+pathname),url:'https://app.example'+pathname,headers:new Headers(token?{authorization:'Bearer '+token}:{}),cookies:{getAll:()=>[]}})
     for(const pathname of ['/api/events','/api/comments','/api/trends/refresh','/api/analytics/refresh']) assert.equal((await proxy(request(pathname))).status,401)
-    assert.equal((await proxy(request('/api/analytics/refresh','test-cron-secret'))).status,200)
+    assert.equal((await proxy(request('/api/analytics/refresh','test-cron-secret'))).status,410)
     assert.equal((await proxy(request('/api/analytics/refresh','wrong-secret'))).status,401)
     assert.equal((await proxy(request('/api/secrets','test-cron-secret'))).status,401)
     assert.equal((await proxy(request('/api/comments','test-cron-secret','POST'))).status,401)
@@ -80,7 +80,7 @@ async function main(){
     const jobId='11111111-1111-4111-8111-111111111111', itemId='22222222-2222-4222-8222-222222222222'
     const dbJob={id:jobId,content_item_id:itemId,status:'running',locked_by:'test-worker'}
     let writes=0
-    const worker=load('src/app/api/worker/route.ts',{'next/server':{NextResponse},'@supabase/supabase-js':{createClient:()=>({rpc:async()=>({data:[],error:null}),from:table=>({select:()=>({eq:()=>({single:async()=>({data:table==='processing_jobs'?dbJob:{user_id:'user',workspace_id:'workspace'}})})}),update:()=>({eq:async()=>{writes++;return {error:null}}})})})}}).POST
+    const worker=load('src/app/api/worker/route.ts',{'next/server':{NextResponse},'@supabase/supabase-js':{createClient:()=>({rpc:async()=>({data:[],error:null}),from:table=>({upsert:async()=>({error:null}),select:()=>({eq:()=>({single:async()=>({data:table==='processing_jobs'?dbJob:{user_id:'user',workspace_id:'workspace'}})})}),update:()=>({eq:async()=>{writes++;return {error:null}}})})})}}).POST
     const workerRequest=(body,token='test-worker-token')=>new Request('https://app.example/api/worker',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify(body)})
     const update={action:'update',workerId:'test-worker',jobId,table:'content_items',id:itemId,values:{progress:30}}
     assert.equal((await worker(workerRequest({action:'claim',workerId:'test-worker'}))).status,200)
@@ -97,7 +97,7 @@ async function main(){
     console.log('PASS: worker bridge rejects wrong tokens, foreign jobs, arbitrary fields and paths; disabled in production.')
 
   }finally{for(const key of Object.keys(process.env))if(!(key in savedEnv))delete process.env[key];Object.assign(process.env,savedEnv)}
-  console.log('PASS: proxy blocks anonymous data access and wrong cron tokens; valid cron tokens work only for scheduled GET routes; missing auth config returns JSON 503.')
+  console.log('PASS: proxy blocks anonymous data access and wrong cron tokens; legacy cron requests are retired; missing auth config returns JSON 503.')
   console.log('PASS: download traversal blocked; valid guide served; login/signup preserve passwords; readiness detects missing, healthy, unhealthy, unreachable workers.')
 }
 main().catch(error=>{console.error(error);process.exitCode=1})

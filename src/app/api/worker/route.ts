@@ -7,13 +7,14 @@ export const runtime = 'nodejs'
 
 const requestSchema = z.object({
   workerId: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/),
-  action: z.enum(['claim', 'update']),
+  action: z.enum(['claim', 'update', 'heartbeat']),
   jobId: z.string().uuid().optional(),
   table: z.enum(['content_items', 'processing_jobs']).optional(),
   id: z.string().uuid().optional(),
   values: z.record(z.string(), z.unknown()).optional(),
 })
 const itemUpdate = z.object({
+  kind: z.enum(['video', 'slideshow', 'image', 'carousel']).optional(),
   status: z.enum(['processing', 'ready', 'queued', 'failed']).optional(),
   progress: z.number().int().min(0).max(100).optional(),
   current_step: z.string().max(200).nullable().optional(),
@@ -48,19 +49,25 @@ export async function POST(request: NextRequest) {
   if (!url || !key) return NextResponse.json({ error: 'Worker database unavailable' }, { status: 503 })
   const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
   const input = parsed.data
-  if (input.action === 'claim') {
+  if (input.action === 'claim' || input.action === 'heartbeat') {
+    const {error:heartbeatError}=await db.from('worker_heartbeats').upsert({worker_id:input.workerId,seen_at:new Date().toISOString(),busy:Boolean(input.jobId)})
+    if(heartbeatError)return NextResponse.json({error:'Worker heartbeat failed'},{status:503})
+    if(input.action==='heartbeat') {
+      if(input.jobId) await db.from('processing_jobs').update({locked_at:new Date().toISOString()}).eq('id',input.jobId).eq('locked_by',input.workerId).eq('status','running')
+      return NextResponse.json({ok:true})
+    }
     const { data, error } = await db.rpc('claim_processing_job', { worker_id: input.workerId })
     if (error) return NextResponse.json({ error: 'Could not claim job' }, { status: 503 })
     const job = data?.[0]
     if (!job) return NextResponse.json({ job: null })
-    const prefix = `${job.user_id}/${job.workspace_id}/${job.content_item_id}`
+    const prefix = `${job.user_id}/${job.workspace_id}/${job.content_item_id}/${job.job_id}`
     try {
       const sources = await Promise.all((job.source_paths as string[]).map(async path => {
         const { data, error } = await db.storage.from('content-media').createSignedUrl(path, 3600)
         if (error || !data) throw new Error('Could not sign media download')
         return { path, url: data.signedUrl }
       }))
-      const uploads = await Promise.all(['output.mp4', 'thumbnail.jpg'].map(async filename => {
+      const uploads = await Promise.all(['output.mp4', 'thumbnail.jpg', ...Array.from({length:5},(_,i)=>`frame-${i}.jpg`), ...Array.from({length:20},(_,i)=>`image-${i}.jpg`)].map(async filename => {
         const path = `${prefix}/${filename}`
         const { data, error } = await db.storage.from('content-media').createSignedUploadUrl(path, { upsert: true })
         if (error || !data) throw new Error('Could not sign media upload')
@@ -85,9 +92,11 @@ export async function POST(request: NextRequest) {
   if (input.table === 'content_items') {
     const { data: item } = await db.from('content_items').select('user_id, workspace_id').eq('id', job.content_item_id).single()
     if (!item) return NextResponse.json({ error: 'Content not found' }, { status: 404 })
-    const prefix = `${item.user_id}/${item.workspace_id}/${job.content_item_id}`
+    const prefix = `${item.user_id}/${item.workspace_id}/${job.content_item_id}/${job.id}`
     const update = values.data as z.infer<typeof itemUpdate>
-    if ((update.output_path && update.output_path !== `${prefix}/output.mp4`) || (update.thumbnail_path && update.thumbnail_path !== `${prefix}/thumbnail.jpg`)) {
+    const validPath=(path:unknown)=>typeof path==='string' && path.startsWith(prefix+'/') && /^(output\.mp4|thumbnail\.jpg|frame-[0-4]\.jpg|image-(?:[0-9]|1[0-9])\.jpg)$/.test(path.slice(prefix.length+1))
+    const metaPaths=[...(Array.isArray(update.metadata?.outputPaths)?update.metadata.outputPaths:[]),...(Array.isArray(update.metadata?.framePaths)?update.metadata.framePaths:[])]
+    if ((update.output_path && !validPath(update.output_path)) || (update.thumbnail_path && update.thumbnail_path !== `${prefix}/thumbnail.jpg`) || metaPaths.some(path=>!validPath(path))) {
       return NextResponse.json({ error: 'Invalid output path' }, { status: 400 })
     }
   }

@@ -21,6 +21,12 @@ export async function GET() {
     const mediaReady = !mediaError
     const storageReady = !storageError
     let workerConnected = false
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      const {createClient:adminClient}=await import('@supabase/supabase-js')
+      const admin=adminClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}})
+      const {data}=await admin.from('worker_heartbeats').select('seen_at').order('seen_at',{ascending:false}).limit(1)
+      workerConnected=Boolean(data?.[0] && Date.now()-Date.parse(data[0].seen_at)<90000)
+    }
     if (process.env.CONTENT_WORKER_URL) {
       try {
         const workerResponse = await fetch(new URL('/health', process.env.CONTENT_WORKER_URL), {
@@ -44,7 +50,7 @@ export async function GET() {
       action:ready ? undefined : !mediaReady || !storageReady
         ? 'Apply the latest Supabase migration and check private media storage.'
         : !workerConnected
-          ? 'Start the media processing worker and configure CONTENT_WORKER_URL to its reachable URL.'
+          ? 'Start the Mac media worker. Its heartbeat will appear here automatically.'
           : 'Configure the missing environment variables and redeploy.',
     }, { status:ready?200:503 })
   } catch (error) {
