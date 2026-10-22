@@ -20,15 +20,38 @@ export async function GET() {
     ])
     const mediaReady = !mediaError
     const storageReady = !storageError
-    const ready = Object.values(configuration).every(Boolean) && mediaReady && storageReady
+    let workerConnected = false
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      const {createClient:adminClient}=await import('@supabase/supabase-js')
+      const admin=adminClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}})
+      const {data}=await admin.from('worker_heartbeats').select('seen_at').order('seen_at',{ascending:false}).limit(1)
+      workerConnected=Boolean(data?.[0] && Date.now()-Date.parse(data[0].seen_at)<90000)
+    }
+    if (process.env.CONTENT_WORKER_URL) {
+      try {
+        const workerResponse = await fetch(new URL('/health', process.env.CONTENT_WORKER_URL), {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(5000),
+        })
+        const workerHealth = workerResponse.ok ? await workerResponse.json() : null
+        workerConnected = workerHealth?.ok === true
+      } catch {
+        workerConnected = false
+      }
+    }
+    const ready = Object.values(configuration).every(Boolean) && mediaReady && storageReady && workerConnected
     return NextResponse.json({
       ready,
       configuration,
       authentication:{ready:true},
       database:{connected:true,mediaSchemaReady:mediaReady},
       storage:{mode:'supabase-private',persistent:true,ready:storageReady},
-      processing:{queueReady:mediaReady,workerConnected:Boolean(process.env.CONTENT_WORKER_URL)},
-      action:ready ? undefined : 'Apply the latest Supabase migration, then redeploy the Preview branch.',
+      processing:{queueReady:mediaReady,workerConnected},
+      action:ready ? undefined : !mediaReady || !storageReady
+        ? 'Apply the latest Supabase migration and check private media storage.'
+        : !workerConnected
+          ? 'Start the Mac media worker. Its heartbeat will appear here automatically.'
+          : 'Configure the missing environment variables and redeploy.',
     }, { status:ready?200:503 })
   } catch (error) {
     console.error('Readiness check failed:',error)

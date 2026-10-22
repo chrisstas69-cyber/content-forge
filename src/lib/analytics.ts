@@ -41,9 +41,16 @@ export async function refreshAnalytics(maxPosts: number = 50): Promise<{ refresh
     try {
       const metrics = await fetchPostMetrics(post)
       if (metrics) {
-        await db.analyticsCache.upsert({
+        const existing = await db.analyticsCache.findFirst({
           where: { postId: post.id },
+          orderBy: { fetchedAt: 'desc' },
+          select: { id: true },
+        })
+        const cacheId = existing?.id || `post:${post.id}`
+        await db.analyticsCache.upsert({
+          where: { id: cacheId },
           create: {
+            id: cacheId,
             postId: post.id,
             videoId: post.videoId,
             platform: post.platform,

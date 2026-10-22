@@ -3,14 +3,17 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000 2>&1 | tee dev.log",
+    "dev": "next dev -p 3000",
     "build": "node ./scripts/prepare-db.js && next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
-    "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
+    "start": "node .next/standalone/server.js",
+    "worker:local": "node --env-file=.env.worker.local worker/src/index.mjs",
+    "test:checkup": "node scripts/checkup.test.cjs",
     "lint": "eslint .",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "test:studio": "node scripts/studio.test.cjs && node scripts/media.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

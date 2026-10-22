@@ -25,7 +25,7 @@ export async function login(formData: FormData) {
   const supabase = await createClient()
   const { error } = await supabase.auth.signInWithPassword({
     email: value(formData, 'email'),
-    password: value(formData, 'password'),
+    password: String(formData.get('password') || ''),
   })
 
   if (error) redirect(`/login?error=${encodeURIComponent(error.message)}`)
@@ -37,7 +37,7 @@ export async function signup(formData: FormData) {
   const siteUrl = await getSiteUrl()
   const { error } = await supabase.auth.signUp({
     email: value(formData, 'email'),
-    password: value(formData, 'password'),
+    password: String(formData.get('password') || ''),
     options: {
       data: { full_name: value(formData, 'name') },
       emailRedirectTo: `${siteUrl}/auth/callback`,

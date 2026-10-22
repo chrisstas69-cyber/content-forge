@@ -128,7 +128,7 @@ Return ONLY a JSON array of ${count} objects:
   }
 
   // Save to DB
-  const saved = []
+  const saved: Awaited<ReturnType<typeof db.idea.create>>[] = []
   for (const idea of ideas) {
     if (!idea.title || !idea.concept) continue
     const row = await db.idea.create({
